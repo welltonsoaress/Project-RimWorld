@@ -42,7 +42,6 @@ func setup_shader_material():
 	material_instance.set_shader_parameter("textureAtlasTexturesWidth", 4.0)
 	material_instance.set_shader_parameter("mapTilesCountX", float(map_width))
 	material_instance.set_shader_parameter("mapTilesCountY", float(map_height))
-	material_instance.set_shader_parameter("blendTextureTiles", 4.0)
 	
 	# Carrega blendTexture se existir
 	var blend_texture = load("res://blendTexture.png")
@@ -77,17 +76,39 @@ func update_texture():
 	
 	print("🎨 mapData atualizado no shader")
 	
-	# Força atualização visual
-	texture = load("res://TileSets/blank_1x1_white.png") # Imagem base para o sprite
-	if texture:
-		# Calcula o tamanho correto baseado no mapa
-		scale = Vector2(
-			float(map_width * tile_size) / texture.get_width(),
-			float(map_height * tile_size) / texture.get_height()
-		)
-		print("🔄 Sprite redimensionado para: ", scale)
+	# CORREÇÃO PRINCIPAL: Ajusta posição e escala corretamente
+	setup_sprite_transform()
 	
 	queue_redraw()
+
+func setup_sprite_transform():
+	# Carrega uma textura base simples
+	texture = load("res://TileSets/blank_1x1_white.png")
+	if not texture:
+		print("❌ Falha ao carregar blank_1x1_white.png")
+		return
+	
+	# Calcula o tamanho total do mapa em pixels
+	var map_pixel_width = map_width * tile_size
+	var map_pixel_height = map_height * tile_size
+	
+	# Ajusta a escala para que o sprite tenha exatamente o tamanho do mapa
+	scale = Vector2(
+		float(map_pixel_width) / texture.get_width(),
+		float(map_pixel_height) / texture.get_height()
+	)
+	
+	# CORREÇÃO CRÍTICA: Posiciona o sprite para começar em (0,0) como os TileMapLayers
+	# Por padrão, Sprite2D é centralizado, então precisamos ajustar
+	position = Vector2(
+		map_pixel_width * 0.5,  # Metade da largura
+		map_pixel_height * 0.5  # Metade da altura
+	)
+	
+	print("🔄 Sprite configurado:")
+	print("  - Escala: ", scale)
+	print("  - Posição: ", position)
+	print("  - Tamanho do mapa: ", map_pixel_width, "x", map_pixel_height)
 
 func load_map_data_safely() -> Image:
 	var image = Image.new()
@@ -109,9 +130,36 @@ func load_map_data_safely() -> Image:
 	# Preenche com padrão de teste (água = tile 3)
 	for x in range(map_width):
 		for y in range(map_height):
-			image.set_pixel(x, y, Color(3.0/7.0, 0, 0)) # Tile ID 3 (água)
+			image.set_pixel(x, y, Color(3.0/7.0, 0, 0)) # Tile ID 0,1 (água)
 	
 	return image
+
+# Função para sincronizar com TileMapLayers
+func sync_with_tilemaps():
+	# Busca por TileMapLayers para sincronizar configurações
+	var terrain_map = get_node_or_null("/root/Main/Terrain/TerrainMap")
+	if terrain_map and terrain_map is TileMapLayer:
+		var tilemap_layer = terrain_map as TileMapLayer
+		
+		# Verifica se há tile_set configurado
+		if tilemap_layer.tile_set:
+			var tile_set = tilemap_layer.tile_set
+			# Pega o tamanho real dos tiles do TileSet
+			var tile_source = tile_set.get_source(0) if tile_set.get_source_count() > 0 else null
+			if tile_source and tile_source is TileSetAtlasSource:
+				var atlas_source = tile_source as TileSetAtlasSource
+				var tile_size_from_tileset = atlas_source.texture_region_size
+				
+				if tile_size_from_tileset.x > 0:
+					tile_size = int(tile_size_from_tileset.x)
+					print("🔄 Tile size sincronizado com TileSet: ", tile_size)
+					
+					# Atualiza o shader com o novo tamanho
+					if material_instance:
+						material_instance.set_shader_parameter("tileSizeInPixels", float(tile_size))
+					
+					# Reconfigura o sprite
+					setup_sprite_transform()
 
 # Função de debug para verificar parâmetros do shader
 func debug_shader_parameters():
@@ -125,8 +173,12 @@ func debug_shader_parameters():
 	print("  - tileSizeInPixels: ", material_instance.get_shader_parameter("tileSizeInPixels"))
 	print("  - mapTilesCountX: ", material_instance.get_shader_parameter("mapTilesCountX"))
 	print("  - mapTilesCountY: ", material_instance.get_shader_parameter("mapTilesCountY"))
+	print("  - Sprite scale: ", scale)
+	print("  - Sprite position: ", position)
 
 # Chama debug após updates (útil para testar)
 func _input(event):
 	if event.is_action_pressed("ui_accept"): # Enter
 		debug_shader_parameters()
+	elif event.is_action_pressed("ui_select"): # Space
+		sync_with_tilemaps()

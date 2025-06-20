@@ -17,14 +17,53 @@ func _ready():
 		is_generating = false
 
 func setup_layers():
-	# Configura z-index das camadas
+	# Configura z-index das camadas para ordem correta de renderização
 	if has_node("ShaderTerrain"):
-		$ShaderTerrain.z_index = 0
+		$ShaderTerrain.z_index = -1  # Shader por baixo de tudo
 	if has_node("Resource/ResourceMap"):
 		$Resource/ResourceMap.z_index = 1
 	if has_node("Object/ObjectMap"):
 		$Object/ObjectMap.z_index = 2
+	
+	# Garante que todos os TileMapLayers tenham a mesma configuração de tile_size
+	sync_tilemap_settings()
+	
 	print("🔧 Camadas configuradas")
+
+func sync_tilemap_settings():
+	# Lista de todos os TileMapLayers que precisam ser sincronizados
+	var tilemaps = []
+	
+	# Coleta todos os TileMapLayers
+	var terrain = get_node_or_null("Terrain/TerrainMap")
+	var resources = get_node_or_null("Resource/ResourceMap")
+	var objects = get_node_or_null("Object/ObjectMap")
+	
+	if terrain: tilemaps.append(terrain)
+	if resources: tilemaps.append(resources)
+	if objects: tilemaps.append(objects)
+	
+	# Sincroniza configurações entre todos os TileMapLayers
+	var reference_tile_size = 32  # Tamanho padrão
+	
+	for tilemap in tilemaps:
+		if tilemap is TileMapLayer and tilemap.tile_set:
+			var tile_set = tilemap.tile_set
+			if tile_set.get_source_count() > 0:
+				var source = tile_set.get_source(0)
+				if source is TileSetAtlasSource:
+					var atlas_source = source as TileSetAtlasSource
+					if atlas_source.texture_region_size.x > 0:
+						reference_tile_size = int(atlas_source.texture_region_size.x)
+						break
+	
+	print("🔄 Tile size de referência: ", reference_tile_size)
+	
+	# Atualiza o shader com o tamanho correto
+	var shader_terrain = get_node_or_null("ShaderTerrain")
+	if shader_terrain and shader_terrain.has_method("sync_with_tilemaps"):
+		shader_terrain.tile_size = reference_tile_size
+		shader_terrain.sync_with_tilemaps()
 
 func generate_all():
 	if is_generating:
@@ -46,28 +85,14 @@ func generate_all():
 		is_generating = false
 		return
 
-	# 2. SEGUNDO: Gera recursos (depende do terreno)
-	var resources = get_node_or_null("Resource/ResourceMap")
-	if resources and resources.has_method("generate"):
-		print("🔧 Gerando recursos...")
-		resources.generate()
-		await get_tree().process_frame
-	else:
-		print("❌ ResourceMap não encontrado!")
-
-	# 3. TERCEIRO: Gera objetos (depende de terreno e recursos)
-	var objects = get_node_or_null("Object/ObjectMap")
-	if objects and objects.has_method("generate"):
-		print("📦 Gerando objetos...")
-		objects.generate()
-		await get_tree().process_frame
-	else:
-		print("❌ ObjectMap não encontrado!")
-
-	# 4. QUARTO: Configura o shader (depende do mapData.png)
+	# 2. SEGUNDO: Configura o shader ANTES dos recursos (para garantir alinhamento)
 	var shader_sprite = get_node_or_null("ShaderTerrain")
 	if shader_sprite:
 		print("🎨 Configurando ShaderTerrain...")
+		# Sincroniza com TileMapLayers primeiro
+		if shader_sprite.has_method("sync_with_tilemaps"):
+			shader_sprite.sync_with_tilemaps()
+		
 		# Aguarda um pouco mais para garantir que o arquivo existe
 		await get_tree().create_timer(0.5).timeout
 		
@@ -77,6 +102,24 @@ func generate_all():
 			print("❌ ShaderTerrain sem método update_texture!")
 	else:
 		print("❌ ShaderTerrain não encontrado!")
+
+	# 3. TERCEIRO: Gera recursos (agora alinhado com o shader)
+	var resources = get_node_or_null("Resource/ResourceMap")
+	if resources and resources.has_method("generate"):
+		print("🔧 Gerando recursos...")
+		resources.generate()
+		await get_tree().process_frame
+	else:
+		print("❌ ResourceMap não encontrado!")
+
+	# 4. QUARTO: Gera objetos (agora alinhado com o shader)
+	var objects = get_node_or_null("Object/ObjectMap")
+	if objects and objects.has_method("generate"):
+		print("📦 Gerando objetos...")
+		objects.generate()
+		await get_tree().process_frame
+	else:
+		print("❌ ObjectMap não encontrado!")
 
 	is_generating = false
 	print("✅ Geração completa finalizada!")
@@ -105,11 +148,22 @@ func debug_final_state():
 			print("  - Shader: ", shader_mat.shader != null)
 			print("  - textureAtlas: ", shader_mat.get_shader_parameter("textureAtlas") != null)
 			print("  - mapData: ", shader_mat.get_shader_parameter("mapData") != null)
+			print("  - Sprite position: ", shader_sprite.position)
+			print("  - Sprite scale: ", shader_sprite.scale)
 			
 			if shader_sprite.has_method("debug_shader_parameters"):
 				shader_sprite.debug_shader_parameters()
 		else:
 			print("❌ ShaderMaterial não encontrado!")
+	
+	# Verifica TileMapLayers
+	var terrain = get_node_or_null("Terrain/TerrainMap")
+	if terrain and terrain is TileMapLayer:
+		print("✅ TerrainMap encontrado")
+		print("  - Position: ", terrain.position)
+		print("  - Scale: ", terrain.scale)
+		if terrain.tile_set:
+			print("  - TileSet configurado: ", terrain.tile_set != null)
 	
 	print("=== FIM DEBUG ===\n")
 
@@ -124,3 +178,19 @@ func _on_generate_button_pressed():
 func force_regenerate():
 	is_generating = false
 	generate_all()
+
+# Função para forçar realinhamento (útil para debug)
+func force_realign():
+	print("🔄 Forçando realinhamento...")
+	sync_tilemap_settings()
+	var shader_sprite = get_node_or_null("ShaderTerrain")
+	if shader_sprite and shader_sprite.has_method("setup_sprite_transform"):
+		shader_sprite.setup_sprite_transform()
+	
+# Função para debug rápido via Input
+func _input(event):
+	if not Engine.is_editor_hint():
+		if event.is_action_pressed("ui_cancel"): # ESC
+			debug_final_state()
+		elif event.is_action_pressed("ui_focus_next"): # Tab
+			force_realign()
