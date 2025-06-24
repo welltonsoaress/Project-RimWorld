@@ -141,9 +141,8 @@ func debug_final_state():
 	# Verifica shader
 	var shader_sprite = get_node_or_null("ShaderTerrain")
 	if shader_sprite:
-		var material = shader_sprite.material
-		if material and material is ShaderMaterial:
-			var shader_mat = material as ShaderMaterial
+		var shader_mat = shader_sprite.material
+		if shader_mat and material is ShaderMaterial:
 			print("✅ ShaderMaterial encontrado")
 			print("  - Shader: ", shader_mat.shader != null)
 			print("  - textureAtlas: ", shader_mat.get_shader_parameter("textureAtlas") != null)
@@ -164,6 +163,12 @@ func debug_final_state():
 		print("  - Scale: ", terrain.scale)
 		if terrain.tile_set:
 			print("  - TileSet configurado: ", terrain.tile_set != null)
+			var tile_source = terrain.tile_set.get_source(0) if terrain.tile_set.get_source_count() > 0 else null
+			if tile_source and tile_source is TileSetAtlasSource:
+				var atlas_source = tile_source as TileSetAtlasSource
+				print("  - Tile size (TileSet): ", atlas_source.texture_region_size)
+			else:
+						print("  - TileSet NÃO configurado!")
 	
 	print("=== FIM DEBUG ===\n")
 

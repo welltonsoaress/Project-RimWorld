@@ -82,11 +82,14 @@ vec4 getColorForCurrentPixel(float tileId, vec2 pixelPosInTile) {
 
     // Se a cor for inválida, usa uma cor padrão baseada no tileId
     if (color.a < 0.1) {
-        // Cores de fallback por ID (usando comparação aproximada de float)
+        // Cores de fallback por ID
         if (abs(tileId - 0.0) < 0.0001) color = vec4(0.2, 0.8, 0.2, 1.0); // Verde (grama)
-        else if (abs(tileId - 1.0) < 0.0001) color = vec4(0.6, 0.4, 0.2, 1.0); // Marrom (terra)
-        else if (abs(tileId - 2.0) < 0.0001) color = vec4(0.8, 0.8, 0.8, 1.0); // Cinza (pedra)
-        else if (abs(tileId - 3.0) < 0.0001) color = vec4(0.2, 0.2, 0.8, 1.0); // Azul (água)
+        else if (abs(tileId - 1.0) < 0.0001) color = vec4(0.1, 0.5, 0.1, 1.0); // Verde escuro (grama mais escura)
+        else if (abs(tileId - 2.0) < 0.0001) color = vec4(0.6, 0.4, 0.2, 1.0); // Marrom (terra)
+        else if (abs(tileId - 3.0) < 0.0001) color = vec4(0.8, 0.8, 0.8, 1.0); // Cinza (pedra)
+        else if (abs(tileId - 4.0) < 0.0001) color = vec4(0.2, 0.2, 0.8, 1.0); // Azul (água)
+        else if (abs(tileId - 5.0) < 0.0001) color = vec4(0.8, 0.6, 0.4, 1.0); // Marrom claro (areia de praia)
+        else if (abs(tileId - 6.0) < 0.0001) color = vec4(0.9, 0.8, 0.6, 1.0); // Bege (areia do deserto)
         else color = vec4(0.5, 0.5, 0.5, 1.0); // Cinza padrão
     }
 

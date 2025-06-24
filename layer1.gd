@@ -41,7 +41,8 @@ func _ready():
 	if not tile_set:
 		print("❌ TileSet não atribuído à camada!")
 		return
-	print("✅ TileMapLayer pronto: ", name)
+	# CORREÇÃO: Define a posição inicial como (0, 0)
+		print("✅ TileMapLayer pronto: ", name, " | Posição inicial: ", position)
 	if not Engine.is_editor_hint():
 		GenerateTerrain()
 
@@ -56,7 +57,7 @@ func GenerateTerrain():
 	else:
 		rng.set_seed(terrainSeed)
 		print("🌱 Usando semente fixa: ", terrainSeed)
-
+	
 	# Usa a variável de instância diretamente
 	match terrainType:
 		"Ilha":
@@ -72,55 +73,59 @@ func GenerateTerrain():
 		"Desertão":
 			isIsland = false
 	print("🔀 Terreno: " + ("Ilha" if isIsland else "Continente"))
-
+	
 	noise = FastNoiseLite.new()
 	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
 	noise.frequency = 0.03
 	noise.seed = terrainSeed
 	print("📊 Ruído configurado com semente: ", noise.seed)
-
+	
 	clear()
-	var image = Image.create(mapWidth, mapHeight, false, Image.FORMAT_RGB8)
-
+	var image = Image.create(mapWidth, mapHeight, true, Image.FORMAT_RGB8)
+	
 	for x in range(mapWidth):
 		for y in range(mapHeight):
 			var height = noise.get_noise_2d(x, y)
 			height = (height + 1.0) / 2.0
-
+			
 			if isIsland:
 				var dx = float(x - mapWidth / 2.0) / (mapWidth / 2.0)
 				var dy = float(y - mapHeight / 2.0) / (mapHeight / 2.0)
 				var dist = sqrt(dx * dx + dy * dy)
 				height *= clamp(1.0 - dist, 0.0, 1.0)
-
-			var atlas_coord = Vector2i(0, 1)  # Água
-			var tile_id = 0
-
+			
+			var atlas_coord = Vector2i(0, 1)  # Água por padrão
+			var tile_id = 4  # Água (índice 4 no atlas)
+			
 			if height < oceanThreshold:
-				atlas_coord = Vector2i(0, 1)
-				tile_id = 3
-			elif height < beachThreshold:
-				atlas_coord = Vector2i(1, 1)
-				tile_id = 1
-			elif height < desertThreshold:
-				atlas_coord = Vector2i(2, 1)
-				tile_id = 7
-			elif height < grassThreshold:
-				atlas_coord = Vector2i(2, 0)
+				atlas_coord = Vector2i(0, 1)  # Água
 				tile_id = 4
-			elif height < darkGrassThreshold:
-				atlas_coord = Vector2i(0, 0)
-				tile_id = 0
-			elif height < mountainThreshold:
-				atlas_coord = Vector2i(1, 0)
+			elif height < beachThreshold:
+				atlas_coord = Vector2i(1, 1)  # Areia de praia
 				tile_id = 5
-			else:
-				atlas_coord = Vector2i(3, 0)
+			elif height < desertThreshold:
+				atlas_coord = Vector2i(2, 1)  # Areia do deserto
+				tile_id = 6
+			elif height < grassThreshold:
+				atlas_coord = Vector2i(0, 0)  # Grama
+				tile_id = 0
+			elif height < darkGrassThreshold:
+				atlas_coord = Vector2i(1, 0)  # Grama escura
+				tile_id = 1
+			elif height < mountainThreshold:
+				atlas_coord = Vector2i(2, 0)  # Terra
 				tile_id = 2
-
-			set_cell(Vector2i(x, y), 1, atlas_coord)
+			else:
+				atlas_coord = Vector2i(3, 0)  # Pedra
+				tile_id = 3
+			set_cell(Vector2i(x, y), 0, atlas_coord)
 			image.set_pixel(x, y, Color(float(tile_id) / 7.0, 0, 0))
-
+			
+	 # CORREÇÃO: Garante a posição (0, 0)
+	position = Vector2(0, 0)
+	print("🔄 TerrainMap posicionado em: ", position)
+	
+	visible = true  # Garante que o TileMapLayer seja invisível
 	var dir = DirAccess.open("res://")
 	if dir and dir.file_exists("res://mapData.png"):
 		dir.remove("res://mapData.png")
@@ -129,11 +134,11 @@ func GenerateTerrain():
 		print("🗺️ mapData.png salvo com sucesso! - Primeiros pixels: ", image.get_pixel(0, 0), image.get_pixel(1, 0))
 	else:
 		print("❌ Falha ao salvar mapData.png, erro: ", error)
-
+	
 	var label = get_tree().root.get_node_or_null("Node2D/CanvasLayer/MapTypeLabel")
 	if label:
 		label.text = "Tipo: " + terrainType + " → " + ("Ilha" if isIsland else "Continente")
-
+	
 	var shader_terrain = get_tree().root.get_node_or_null("ShaderTerrain")
 	if shader_terrain and shader_terrain.has_method("update_texture"):
 		shader_terrain.update_texture()
