@@ -10,11 +10,53 @@ func _ready():
 	if not Engine.is_editor_hint() and not is_generating:
 		is_generating = true
 		print("🎮 Iniciando geração do mapa procedural...")
+		
+		# PRIMEIRO: Verifica e corrige scripts se necessário
+		ensure_scripts_are_loaded()
+		
 		setup_layers()
 		# Aguarda um frame para garantir que tudo está inicializado
 		await get_tree().process_frame
 		generate_all()
 		is_generating = false
+
+func ensure_scripts_are_loaded():
+	print("🔧 Verificando scripts dos TileMapLayers...")
+	
+	# Verifica TerrainMap
+	var terrain = get_node_or_null("Terrain/TerrainMap")
+	if terrain and terrain is TileMapLayer:
+		var script = terrain.get_script()
+		if not script or not script.resource_path.ends_with("layer1.gd"):
+			print("🔄 Aplicando script layer1.gd ao TerrainMap...")
+			var layer1_script = load("res://Terrain_map.gd")
+			if layer1_script:
+				terrain.set_script(layer1_script)
+				print("✅ Script terrain_map.gd aplicado")
+			else:
+				print("❌ Falha ao carregar layer1.gd")
+	
+	# Verifica ResourceMap
+	var resource_map = get_node_or_null("Resource/ResourceMap")
+	if resource_map and resource_map is TileMapLayer:
+		var script = resource_map.get_script()
+		if not script or not script.resource_path.ends_with("resource_map.gd"):
+			print("🔄 Aplicando script resource_map.gd...")
+			var resource_script = load("res://resource_map.gd")
+			if resource_script:
+				resource_map.set_script(resource_script)
+				print("✅ Script resource_map.gd aplicado")
+	
+	# Verifica ObjectMap
+	var object_map = get_node_or_null("Object/ObjectMap")
+	if object_map and object_map is TileMapLayer:
+		var script = object_map.get_script()
+		if not script or not script.resource_path.ends_with("object_map.gd"):
+			print("🔄 Aplicando script object_map.gd...")
+			var object_script = load("res://object_map.gd")
+			if object_script:
+				object_map.set_script(object_script)
+				print("✅ Script object_map.gd aplicado")
 
 func setup_layers():
 	# Configura z-index das camadas para ordem correta de renderização
@@ -34,10 +76,10 @@ func sync_tilemap_settings():
 	# Lista de todos os TileMapLayers que precisam ser sincronizados
 	var tilemaps = []
 	
-	# Coleta todos os TileMapLayers
-	var terrain = get_node_or_null("Terrain/TerrainMap")
-	var resources = get_node_or_null("Resource/ResourceMap")
-	var objects = get_node_or_null("Object/ObjectMap")
+	# Coleta todos os TileMapLayers usando busca mais robusta
+	var terrain = find_terrain_map()
+	var resources = find_resource_map()
+	var objects = find_object_map()
 	
 	if terrain: tilemaps.append(terrain)
 	if resources: tilemaps.append(resources)
@@ -74,14 +116,47 @@ func generate_all():
 	print("🚀 Iniciando geração completa...")
 
 	# 1. PRIMEIRO: Gera o terreno e salva mapData.png
-	var terrain = get_node_or_null("Terrain/TerrainMap")
-	if terrain and terrain.has_method("GenerateTerrain"):
-		print("🌍 Gerando terreno...")
-		terrain.GenerateTerrain()
+	var terrain = find_terrain_map()
+	if terrain:
+		print("🌍 TerrainMap encontrado: ", terrain.name, " | Script: ", terrain.get_script())
+		
+		# Debug dos métodos disponíveis
+		print("🔍 Métodos disponíveis no TerrainMap:")
+		if terrain.has_method("GenerateTerrain"):
+			print("  ✅ GenerateTerrain() encontrado")
+		else:
+			print("  ❌ GenerateTerrain() NÃO encontrado")
+			
+		# Tenta outros nomes de métodos possíveis
+		var method_alternatives = ["generate_terrain", "generate", "_generate_terrain", "regenerate"]
+		for method_name in method_alternatives:
+			if terrain.has_method(method_name):
+				print("  ✅ Método alternativo encontrado: ", method_name)
+		
+		# Tenta chamar o método
+		if terrain.has_method("GenerateTerrain"):
+			print("🌍 Gerando terreno...")
+			terrain.GenerateTerrain()
+		elif terrain.has_method("generate_terrain"):
+			print("🌍 Gerando terreno (método alternativo)...")
+			terrain.generate_terrain()
+		elif terrain.has_method("generate"):
+			print("🌍 Gerando terreno (método generate)...")
+			terrain.generate()
+		else:
+			print("❌ Nenhum método de geração encontrado! Tentando forçar...")
+			# Tenta definir a propriedade generateTerrain se existir
+			if "generateTerrain" in terrain:
+				terrain.generateTerrain = true
+				print("🔄 Propriedade generateTerrain definida")
+			else:
+				print("❌ Propriedade generateTerrain não encontrada")
+		
 		# Aguarda mais tempo para garantir que o arquivo foi salvo
 		await get_tree().create_timer(1.0).timeout
 	else:
-		print("❌ TerrainMap não encontrado!")
+		print("❌ TerrainMap não encontrado! Procurando alternativas...")
+		debug_scene_structure()
 		is_generating = false
 		return
 
@@ -104,7 +179,7 @@ func generate_all():
 		print("❌ ShaderTerrain não encontrado!")
 
 	# 3. TERCEIRO: Gera recursos (agora alinhado com o shader)
-	var resources = get_node_or_null("Resource/ResourceMap")
+	var resources = find_resource_map()
 	if resources and resources.has_method("generate"):
 		print("🔧 Gerando recursos...")
 		resources.generate()
@@ -113,7 +188,7 @@ func generate_all():
 		print("❌ ResourceMap não encontrado!")
 
 	# 4. QUARTO: Gera objetos (agora alinhado com o shader)
-	var objects = get_node_or_null("Object/ObjectMap")
+	var objects = find_object_map()
 	if objects and objects.has_method("generate"):
 		print("📦 Gerando objetos...")
 		objects.generate()
@@ -126,6 +201,126 @@ func generate_all():
 	
 	# Debug final
 	debug_final_state()
+
+# Função robusta para encontrar o TerrainMap
+func find_terrain_map() -> TileMapLayer:
+	# Lista de possíveis caminhos para o TerrainMap
+	var possible_paths = [
+		"Terrain/TerrainMap",
+		"TerrainMap",
+		"Terrain/Layer1",
+		"Layer1"
+	]
+	
+	# Tenta caminhos diretos primeiro
+	for path in possible_paths:
+		var node = get_node_or_null(path)
+		if node and node is TileMapLayer:
+			print("✅ TerrainMap encontrado em: ", path)
+			return node
+	
+	# Busca recursiva se não encontrou
+	var terrain_by_name = find_tilemap_by_name("TerrainMap")
+	if terrain_by_name:
+		print("✅ TerrainMap encontrado via busca recursiva: ", terrain_by_name.get_path())
+		return terrain_by_name
+	
+	# Busca por script específico
+	var terrain_by_script = find_node_with_script("layer1.gd")
+	if terrain_by_script and terrain_by_script is TileMapLayer:
+		print("✅ TerrainMap encontrado via script: ", terrain_by_script.get_path())
+		return terrain_by_script
+	
+	return null
+
+# Função robusta para encontrar o ResourceMap
+func find_resource_map() -> TileMapLayer:
+	var possible_paths = [
+		"Resource/ResourceMap",
+		"ResourceMap",
+		"Resources/ResourceMap"
+	]
+	
+	for path in possible_paths:
+		var node = get_node_or_null(path)
+		if node and node is TileMapLayer:
+			return node
+	
+	var resource_by_name = find_tilemap_by_name("ResourceMap")
+	if resource_by_name:
+		return resource_by_name
+	
+	return find_node_with_script("resource_map.gd")
+
+# Função robusta para encontrar o ObjectMap
+func find_object_map() -> TileMapLayer:
+	var possible_paths = [
+		"Object/ObjectMap",
+		"ObjectMap",
+		"Objects/ObjectMap"
+	]
+	
+	for path in possible_paths:
+		var node = get_node_or_null(path)
+		if node and node is TileMapLayer:
+			return node
+	
+	var object_by_name = find_tilemap_by_name("ObjectMap")
+	if object_by_name:
+		return object_by_name
+	
+	return find_node_with_script("object_map.gd")
+
+# Busca recursiva por nome
+func find_tilemap_by_name(target_name: String) -> TileMapLayer:
+	return find_tilemap_recursive(self, target_name)
+
+func find_tilemap_recursive(node: Node, target_name: String) -> TileMapLayer:
+	if node is TileMapLayer and node.name == target_name:
+		return node
+	
+	for child in node.get_children():
+		var child_result = find_tilemap_recursive(child, target_name)
+		if child_result:
+			return child_result
+	
+	return null
+
+# Busca por script específico
+func find_node_with_script(script_name: String) -> Node:
+	return find_script_recursive(self, script_name)
+
+func find_script_recursive(node: Node, script_name: String) -> Node:
+	if node.get_script() and node.get_script().resource_path.ends_with(script_name):
+		return node
+	
+	for child in node.get_children():
+		var script_result = find_script_recursive(child, script_name)
+		if script_result:
+			return script_result
+	
+	return null
+
+func debug_scene_structure():
+	print("\n🔍 === ESTRUTURA DA CENA ===")
+	print_tree_structure(self, 0)
+	print("=== FIM ESTRUTURA ===\n")
+
+func print_tree_structure(node: Node, level: int):
+	var indent = ""
+	for i in range(level):
+		indent += "  "
+	
+	var info = indent + "📁 " + node.name + " (" + node.get_class() + ")"
+	if node is TileMapLayer:
+		info += " [TileMapLayer]"
+	if node.get_script():
+		info += " [Script: " + node.get_script().resource_path.get_file() + "]"
+	
+	print(info)
+	
+	for child in node.get_children():
+		print_tree_structure(child, level + 1)
 
 func debug_final_state():
 	print("\n🔍 === DEBUG FINAL ===")
@@ -142,7 +337,7 @@ func debug_final_state():
 	var shader_sprite = get_node_or_null("ShaderTerrain")
 	if shader_sprite:
 		var shader_mat = shader_sprite.material
-		if shader_mat and material is ShaderMaterial:
+		if shader_mat and shader_mat is ShaderMaterial:
 			print("✅ ShaderMaterial encontrado")
 			print("  - Shader: ", shader_mat.shader != null)
 			print("  - textureAtlas: ", shader_mat.get_shader_parameter("textureAtlas") != null)
@@ -156,7 +351,7 @@ func debug_final_state():
 			print("❌ ShaderMaterial não encontrado!")
 	
 	# Verifica TileMapLayers
-	var terrain = get_node_or_null("Terrain/TerrainMap")
+	var terrain = find_terrain_map()
 	if terrain and terrain is TileMapLayer:
 		print("✅ TerrainMap encontrado")
 		print("  - Position: ", terrain.position)
@@ -168,7 +363,9 @@ func debug_final_state():
 				var atlas_source = tile_source as TileSetAtlasSource
 				print("  - Tile size (TileSet): ", atlas_source.texture_region_size)
 			else:
-						print("  - TileSet NÃO configurado!")
+				print("  - TileSet source não encontrada!")
+		else:
+			print("  - TileSet NÃO configurado!")
 	
 	print("=== FIM DEBUG ===\n")
 
@@ -191,7 +388,7 @@ func force_realign():
 	var shader_sprite = get_node_or_null("ShaderTerrain")
 	if shader_sprite and shader_sprite.has_method("setup_sprite_transform"):
 		shader_sprite.setup_sprite_transform()
-	
+
 # Função para debug rápido via Input
 func _input(event):
 	if not Engine.is_editor_hint():
@@ -199,3 +396,5 @@ func _input(event):
 			debug_final_state()
 		elif event.is_action_pressed("ui_focus_next"): # Tab
 			force_realign()
+		elif event.is_action_pressed("ui_text_clear_carets_and_selection"): # Ctrl+D (ou outra tecla)
+			debug_scene_structure()

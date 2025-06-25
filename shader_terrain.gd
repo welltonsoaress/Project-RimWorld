@@ -98,18 +98,26 @@ func setup_sprite_transform():
 	var map_pixel_width = map_width * tile_size
 	var map_pixel_height = map_height * tile_size
 	
-	# Ajusta a escala para que o sprite tenha exatamente o tamanho do mapa
+	# CORREÇÃO PRINCIPAL: Ajusta a escala para que o sprite tenha exatamente o tamanho do mapa
+	# Mas considera que o TileMapLayer usa coordenadas de células, não pixels
 	scale = Vector2(
 		float(map_pixel_width) / texture.get_width(),
 		float(map_pixel_height) / texture.get_height()
 	)
 	
-	# CORREÇÃO: Posiciona o sprite com origem em (0,0) para alinhar com TileMapLayer
+	# CORREÇÃO CRÍTICA: Posiciona o sprite considerando que o TileMapLayer 
+	# tem suas células começando em (0,0) mas o centro do sprite deve alinhar
+	# Para alinhar perfeitamente, posicionamos no centro da primeira célula
 	position = Vector2(0, 0)
+	
+	# Define a âncora para top-left para alinhar com TileMapLayer
+	offset = Vector2(0, 0)
+	centered = false
 	
 	print("🔄 Sprite configurado:")
 	print("  - Escala: ", scale)
 	print("  - Posição: ", position)
+	print("  - Centered: ", centered)
 	print("  - Tamanho do mapa: ", map_pixel_width, "x", map_pixel_height)
 
 func load_map_data_safely() -> Image:
@@ -165,13 +173,32 @@ func sync_with_tilemaps():
 					setup_sprite_transform()
 			
 			# Sincroniza map_width e map_height
-			if terrain_map.mapWidth != map_width or terrain_map.mapHeight != map_height:
-				map_width = terrain_map.mapWidth
-				map_height = terrain_map.mapHeight
+			var terrain_map_width = 128
+			var terrain_map_height = 128
+			
+			# Verifica se as propriedades existem no terrain_map
+			if "mapWidth" in terrain_map:
+				terrain_map_width = terrain_map.mapWidth
+			if "mapHeight" in terrain_map:
+				terrain_map_height = terrain_map.mapHeight
+			
+			if terrain_map_width != map_width or terrain_map_height != map_height:
+				map_width = terrain_map_width
+				map_height = terrain_map_height
 				if material_instance:
 					material_instance.set_shader_parameter("mapTilesCountX", float(map_width))
 					material_instance.set_shader_parameter("mapTilesCountY", float(map_height))
 				print("🔄 Map size sincronizado: ", map_width, "x", map_height)
+		
+		# CORREÇÃO: Força o mesmo transform que o TileMapLayer
+		# Garante que ambos tenham a mesma posição
+		if terrain_map.position != Vector2.ZERO:
+			print("⚠️ TerrainMap não está em (0,0), corrigindo...")
+			terrain_map.position = Vector2.ZERO
+		
+		position = Vector2.ZERO
+		print("🔄 Posições sincronizadas: Shader=", position, " Terrain=", terrain_map.position)
+		
 	else:
 		print("❌ TerrainMap não encontrado para sincronização!")
 
@@ -188,6 +215,7 @@ func debug_shader_parameters():
 	print("  - mapTilesCountY: ", material_instance.get_shader_parameter("mapTilesCountY"))
 	print("  - Sprite scale: ", scale)
 	print("  - Sprite position: ", position)
+	print("  - Sprite centered: ", centered)
 
 func _input(event):
 	if event.is_action_pressed("ui_accept"): # Enter
