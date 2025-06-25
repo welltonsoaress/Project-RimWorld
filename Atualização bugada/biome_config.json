@@ -1,0 +1,160 @@
+{
+  "biomes": {
+	"ocean": {
+	  "id": 0,
+	  "name": "Ocean",
+	  "height_range": [0.0, 0.25],
+	  "temperature_range": [0.0, 1.0],
+	  "humidity_range": [0.0, 1.0],
+	  "terrain_tile": {"atlas_coords": [0, 1], "tile_id": 4},
+	  "color": [0.2, 0.2, 0.8],
+	  "resources": {},
+	  "objects": {}
+	},
+	"beach": {
+	  "id": 1,
+	  "name": "Beach",
+	  "height_range": [0.25, 0.35],
+	  "temperature_range": [0.3, 1.0],
+	  "humidity_range": [0.0, 0.7],
+	  "terrain_tile": {"atlas_coords": [1, 1], "tile_id": 5},
+	  "color": [0.8, 0.6, 0.4],
+	  "resources": {
+		"stone": {"chance": 0.02, "cluster_size": 5}
+	  },
+	  "objects": {}
+	},
+	"desert": {
+	  "id": 2,
+	  "name": "Desert",
+	  "height_range": [0.35, 0.45],
+	  "temperature_range": [0.6, 1.0],
+	  "humidity_range": [0.0, 0.3],
+	  "terrain_tile": {"atlas_coords": [2, 1], "tile_id": 6},
+	  "color": [0.9, 0.8, 0.6],
+	  "resources": {
+		"stone": {"chance": 0.04, "cluster_size": 8}
+	  },
+	  "objects": {}
+	},
+	"grassland": {
+	  "id": 3,
+	  "name": "Grassland",
+	  "height_range": [0.45, 0.55],
+	  "temperature_range": [0.2, 0.8],
+	  "humidity_range": [0.3, 0.8],
+	  "terrain_tile": {"atlas_coords": [0, 0], "tile_id": 0},
+	  "color": [0.2, 0.8, 0.2],
+	  "resources": {
+		"stone": {"chance": 0.01, "cluster_size": 3}
+	  },
+	  "objects": {
+		"grass": {"chance": 0.08, "atlas_coords": [0, 0]},
+		"tree": {"chance": 0.03, "atlas_coords": [1, 0]}
+	  }
+	},
+	"forest": {
+	  "id": 4,
+	  "name": "Forest",
+	  "height_range": [0.55, 0.7],
+	  "temperature_range": [0.1, 0.7],
+	  "humidity_range": [0.5, 1.0],
+	  "terrain_tile": {"atlas_coords": [1, 0], "tile_id": 1},
+	  "color": [0.1, 0.5, 0.1],
+	  "resources": {
+		"stone": {"chance": 0.015, "cluster_size": 4}
+	  },
+	  "objects": {
+		"grass": {"chance": 0.12, "atlas_coords": [0, 0]},
+		"tree": {"chance": 0.15, "atlas_coords": [1, 0]}
+	  }
+	},
+	"hills": {
+	  "id": 5,
+	  "name": "Hills",
+	  "height_range": [0.7, 0.85],
+	  "temperature_range": [0.0, 0.6],
+	  "humidity_range": [0.2, 0.8],
+	  "terrain_tile": {"atlas_coords": [2, 0], "tile_id": 2},
+	  "color": [0.6, 0.4, 0.2],
+	  "resources": {
+		"stone": {"chance": 0.06, "cluster_size": 12}
+	  },
+	  "objects": {
+		"tree": {"chance": 0.02, "atlas_coords": [1, 0]}
+	  }
+	},
+	"mountains": {
+	  "id": 6,
+	  "name": "Mountains",
+	  "height_range": [0.85, 1.0],
+	  "temperature_range": [0.0, 0.4],
+	  "humidity_range": [0.0, 1.0],
+	  "terrain_tile": {"atlas_coords": [3, 0], "tile_id": 3},
+	  "color": [0.8, 0.8, 0.8],
+	  "resources": {
+		"stone": {"chance": 0.12, "cluster_size": 20}
+	  },
+	  "objects": {}
+	}
+  },
+  "resources": {
+	"stone": {
+	  "atlas_coords": [2, 0],
+	  "name": "Stone",
+	  "color": [0.6, 0.6, 0.6]
+	}
+  },
+  "objects": {
+	"grass": {
+	  "atlas_coords": [0, 0],
+	  "name": "Grass",
+	  "blocks_movement": false
+	},
+	"tree": {
+	  "atlas_coords": [1, 0],
+	  "name": "Tree",
+	  "blocks_movement": true
+	}
+  },
+  "generation_settings": {
+	"noise": {
+	  "height": {
+		"frequency": 0.03,
+		"octaves": 4,
+		"lacunarity": 2.0,
+		"gain": 0.5
+	  },
+	  "temperature": {
+		"frequency": 0.02,
+		"octaves": 3,
+		"lacunarity": 2.0,
+		"gain": 0.5
+	  },
+	  "humidity": {
+		"frequency": 0.025,
+		"octaves": 3,
+		"lacunarity": 2.0,
+		"gain": 0.5
+	  }
+	},
+	"terrain_types": {
+	  "island": {
+		"name": "Island",
+		"falloff_strength": 1.0,
+		"center_boost": 0.2
+	  },
+	  "continent": {
+		"name": "Continent", 
+		"falloff_strength": 0.3,
+		"center_boost": 0.0
+	  },
+	  "archipelago": {
+		"name": "Archipelago",
+		"falloff_strength": 0.8,
+		"center_boost": 0.1,
+		"island_count": 5
+	  }
+	}
+  }
+}
