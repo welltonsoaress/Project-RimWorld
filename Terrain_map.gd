@@ -35,7 +35,7 @@ var terrainType: String = "Auto"
 @export var mountainThreshold := 0.85
 
 var noise: FastNoiseLite = null
-var isIsland: bool = false  # Variável de instância
+var isIsland: bool = false
 
 func _ready():
 	print("🌍 TerrainMap _ready() chamado")
@@ -53,48 +53,54 @@ func _ready():
 		await get_tree().process_frame
 		GenerateTerrain()
 
-# Criar TileSet automaticamente se não existir
+# Criar TileSet automaticamente usando APENAS textureAtlas.png
 func create_automatic_tileset():
+	print("🔧 Criando TileSet com textureAtlas.png...")
+	
 	var new_tileset = TileSet.new()
 	var atlas_source = TileSetAtlasSource.new()
 	
-	# Carrega a textura do atlas
+	# Carrega APENAS a textura textureAtlas.png
 	var texture_atlas = load("res://TileSets/textureAtlas.png")
 	if not texture_atlas:
-		print("❌ Falha ao carregar textureAtlas.png")
+		print("❌ ERRO: textureAtlas.png não encontrado em res://TileSets/")
+		print("❌ Verifique se o arquivo existe no caminho correto")
 		return
 	
 	atlas_source.texture = texture_atlas
 	atlas_source.texture_region_size = Vector2i(32, 32)
 	
-	print("✅ Textura carregada: ", texture_atlas.resource_path, " - Tamanho: ", texture_atlas.get_size())
+	print("✅ textureAtlas.png carregado: ", texture_atlas.get_size())
 	
-	# Atlas 4x4 (128x128 pixels, tiles de 32x32)
-	var tiles_per_row = 4
-	var tiles_per_col = 4
+	# textureAtlas.png é 4x4 = 128x128 pixels, tiles de 32x32
+	# Primeira linha (y=0): grama(0,0), grama_escura(1,0), terra(2,0), pedra(3,0)
+	# Segunda linha (y=1): água(0,1), areia_praia(1,1), areia_deserto(2,1), extra(3,1)
 	
-	print("📊 Atlas: ", tiles_per_row, "x", tiles_per_col, " tiles (", tiles_per_row * tiles_per_col, " total)")
+	var tiles_to_create = [
+		Vector2i(0, 0),  # Grama
+		Vector2i(1, 0),  # Grama escura
+		Vector2i(2, 0),  # Terra
+		Vector2i(3, 0),  # Pedra
+		Vector2i(0, 1),  # Água
+		Vector2i(1, 1),  # Areia praia
+		Vector2i(2, 1),  # Areia deserto
+		Vector2i(3, 1)   # Extra (se existir)
+	]
 	
-	# Cria tiles automaticamente
-	for y in range(tiles_per_col):
-		for x in range(tiles_per_row):
-			if y >= 2:  # Só cria 2 linhas (8 tiles)
-				break
-			
-			var atlas_coords = Vector2i(x, y)
+	for atlas_coords in tiles_to_create:
+		# Verifica se o tile está dentro dos limites da textura
+		var tile_pixel_x = atlas_coords.x * 32
+		var tile_pixel_y = atlas_coords.y * 32
+		
+		if tile_pixel_x + 32 <= texture_atlas.get_width() and tile_pixel_y + 32 <= texture_atlas.get_height():
 			atlas_source.create_tile(atlas_coords)
-			
-			# Cria região de textura para cada tile
-			var tile_data = atlas_source.get_tile_data(atlas_coords, 0)
-			if tile_data:
-				# Define propriedades básicas do tile se necessário
-				pass
-			
-			print("🌍 Tile terrain criado: ", atlas_coords)
+			print("✅ Tile criado: ", atlas_coords)
+		else:
+			print("⚠️ Tile fora dos limites: ", atlas_coords)
 	
 	new_tileset.add_source(atlas_source, 0)
 	tile_set = new_tileset
-	print("✅ TileSet criado automaticamente para terrain")
+	print("✅ TileSet criado automaticamente com textureAtlas.png")
 
 func GenerateTerrain():
 	print("🌍 Gerando terreno procedural...")
@@ -117,7 +123,7 @@ func GenerateTerrain():
 		rng.set_seed(terrainSeed)
 		print("🌱 Usando semente fixa: ", terrainSeed)
 	
-	# Usa a variável de instância diretamente
+	# Determina tipo de terreno
 	match terrainType:
 		"Ilha":
 			isIsland = true
@@ -153,6 +159,7 @@ func GenerateTerrain():
 				var dist = sqrt(dx * dx + dy * dy)
 				height *= clamp(1.0 - dist, 0.0, 1.0)
 			
+			# Mapeamento direto para textureAtlas.png (4x4 grid)
 			var atlas_coord = Vector2i(0, 1)  # Água por padrão
 			var tile_id = 4  # Água (índice 4 no atlas)
 			
