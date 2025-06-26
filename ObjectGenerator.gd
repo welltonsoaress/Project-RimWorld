@@ -18,14 +18,19 @@ extends TileMapLayer
 
 # === CONFIGURAÇÕES DE DENSIDADE ===
 @export_group("Densidade de Vegetação")
-@export_range(0.0, 0.3) var grass_density: float = 0.08
-@export_range(0.0, 0.15) var tree_density: float = 0.04
-@export_range(0.0, 0.1) var bush_density: float = 0.02
+@export_range(0.0, 0.3) var grass_density: float = 0.06  # Reduzido
+@export_range(0.0, 0.15) var tree_density: float = 0.03  # Reduzido
+@export_range(0.0, 0.1) var bush_density: float = 0.015  # Reduzido
+
+# === CONFIGURAÇÕES DE ESPAÇAMENTO ===
+@export_group("Espaçamento de Recursos")
+@export_range(1, 5) var resource_avoidance_radius: int = 2  # Raio de evitação de recursos
+@export_range(1, 3) var object_spacing: int = 1  # Espaçamento mínimo entre objetos
 
 @export_group("Modificadores por Bioma")
-@export_range(0.0, 5.0) var forest_vegetation_bonus: float = 3.0
-@export_range(0.0, 2.0) var grassland_bonus: float = 1.5
-@export_range(0.0, 1.0) var desert_penalty: float = 0.1
+@export_range(0.0, 5.0) var forest_vegetation_bonus: float = 2.5
+@export_range(0.0, 2.0) var grassland_bonus: float = 1.2
+@export_range(0.0, 1.0) var desert_penalty: float = 0.15
 
 @export_group("Debug")
 @export var debug_object_placement: bool = false
@@ -36,47 +41,48 @@ var resource_generator: TileMapLayer
 var map_width: int = 128
 var map_height: int = 128
 var occupied_positions: Dictionary = {}  # Posições ocupadas por recursos
+var placed_objects: Dictionary = {}  # Posições ocupadas por objetos já colocados
 
 var object_configs = {
 	"grass": {
 		"atlas_coords": Vector2i(0, 0),
-		"base_chance": 0.08,
+		"base_chance": 0.06,
 		"blocks_movement": false,
 		"biome_preferences": {
-			"grassland": 1.5,
-			"forest": 2.0,
-			"hills": 0.8,
-			"beach": 0.3,
-			"mountain": 0.2,
-			"desert": 0.1,
+			"grassland": 1.2,
+			"forest": 1.8,
+			"hills": 0.7,
+			"beach": 0.2,
+			"mountain": 0.1,
+			"desert": 0.08,
 			"ocean": 0.0
 		}
 	},
 	"tree": {
 		"atlas_coords": Vector2i(1, 0),
-		"base_chance": 0.04,
+		"base_chance": 0.03,
 		"blocks_movement": true,
 		"biome_preferences": {
-			"forest": 4.0,
-			"grassland": 1.0,
-			"hills": 0.6,
-			"mountain": 0.3,
+			"forest": 3.0,
+			"grassland": 0.8,
+			"hills": 0.5,
+			"mountain": 0.2,
 			"beach": 0.0,
-			"desert": 0.05,
+			"desert": 0.03,
 			"ocean": 0.0
 		}
 	},
 	"bush": {
 		"atlas_coords": Vector2i(2, 1),
-		"base_chance": 0.02,
+		"base_chance": 0.015,
 		"blocks_movement": false,
 		"biome_preferences": {
-			"forest": 2.0,
-			"grassland": 1.2,
-			"hills": 1.5,
-			"desert": 0.3,
-			"mountain": 0.4,
-			"beach": 0.1,
+			"forest": 1.5,
+			"grassland": 1.0,
+			"hills": 1.2,
+			"desert": 0.2,
+			"mountain": 0.3,
+			"beach": 0.05,
 			"ocean": 0.0
 		}
 	}
@@ -84,7 +90,7 @@ var object_configs = {
 
 func _ready():
 	print("🌿 ObjectGenerator iniciado")
-	add_to_group("objects")  # CORREÇÃO CRÍTICA: Adiciona ao grupo
+	add_to_group("objects")
 	
 	setup_tileset()
 	find_generators()
@@ -120,14 +126,13 @@ func setup_tileset():
 	print("✅ ObjectGenerator: TileSet configurado")
 
 func find_generators():
-	"""Encontra outros geradores na cena - VERSÃO MELHORADA"""
+	"""Encontra outros geradores na cena"""
 	print("🔍 ObjectGenerator buscando dependências...")
 	
 	# Busca TerrainGenerator
 	var terrain_nodes = get_tree().get_nodes_in_group("terrain")
 	if terrain_nodes.size() > 0:
 		terrain_generator = terrain_nodes[0]
-		# Obtém dimensões do mapa
 		if "map_width" in terrain_generator:
 			map_width = terrain_generator.map_width
 		if "map_height" in terrain_generator:
@@ -146,9 +151,10 @@ func find_generators():
 		print("❌ AVISO: ResourceGenerator não encontrado!")
 
 func generate():
-	"""Gera objetos evitando sobreposição com recursos - VERSÃO MELHORADA"""
-	print("🌿 Gerando objetos evitando recursos...")
+	"""Gera objetos evitando sobreposição com recursos - VERSÃO MELHORADA COM ESPAÇAMENTO"""
+	print("🌿 Gerando objetos com espaçamento de recursos...")
 	clear()
+	placed_objects.clear()
 	
 	if not terrain_generator or not resource_generator:
 		find_generators()
@@ -159,23 +165,24 @@ func generate():
 	
 	force_correct_positioning()
 	
-	# MELHORIA: Se não temos posições ocupadas mapeadas, mapeia agora
-	if occupied_positions.is_empty():
-		map_resource_positions()
+	# MELHORIA: Mapeia posições ocupadas com área de influência
+	map_resource_positions_with_buffer()
 	
-	var placed_objects = {}
 	var object_stats = {}
 	var blocked_by_resources = 0
 	var blocked_by_water = 0
+	var blocked_by_spacing = 0
 	
 	print("📍 Gerando objetos em mapa ", map_width, "x", map_height)
-	print("🚫 Posições bloqueadas por recursos: ", occupied_positions.size())
+	print("🚫 Área bloqueada por recursos (incluindo buffer): ", occupied_positions.size())
+	print("🛡️ Raio de evitação de recursos: ", resource_avoidance_radius)
+	print("📏 Espaçamento entre objetos: ", object_spacing)
 	
 	# Inicializa estatísticas
 	for object_name in object_configs:
 		object_stats[object_name] = 0
 	
-	# Gera objetos por tipo, verificando recursos primeiro
+	# Gera objetos por tipo, verificando espaçamento
 	for object_name in object_configs:
 		var config = object_configs[object_name]
 		var base_chance = config["base_chance"]
@@ -184,12 +191,12 @@ func generate():
 			for y in range(map_height):
 				var pos = Vector2i(x, y)
 				
-				# Verifica se já tem objeto
+				# Verifica se já tem objeto nesta posição
 				if str(pos) in placed_objects:
 					continue
 				
-				# CORREÇÃO PRINCIPAL: Verifica posições ocupadas PRIMEIRO
-				if is_position_blocked(pos):
+				# VERIFICAÇÃO PRINCIPAL: Área de influência de recursos
+				if is_position_in_resource_influence_area(pos):
 					blocked_by_resources += 1
 					continue
 				
@@ -199,66 +206,147 @@ func generate():
 					blocked_by_water += 1
 					continue
 				
+				# NOVA VERIFICAÇÃO: Espaçamento entre objetos
+				if not has_adequate_object_spacing(pos):
+					blocked_by_spacing += 1
+					continue
+				
 				# Calcula chance modificada por bioma
 				var biome_preference = config["biome_preferences"].get(biome, 0.0)
 				var final_chance = base_chance * biome_preference
 				
 				# Testa geração
 				if randf() < final_chance:
-					if place_object_safe(pos, object_name, placed_objects):
+					if place_object_safe(pos, object_name):
 						object_stats[object_name] += 1
+						placed_objects[str(pos)] = object_name
 	
-	print("🚫 Objetos bloqueados - Recursos: ", blocked_by_resources, " Água: ", blocked_by_water)
+	print("🚫 Objetos bloqueados - Recursos: ", blocked_by_resources, " Água: ", blocked_by_water, " Espaçamento: ", blocked_by_spacing)
 	print_object_statistics(object_stats, map_width * map_height)
-	print("✅ Objetos gerados evitando recursos!")
+	print("✅ Objetos gerados com espaçamento adequado!")
 
-func map_resource_positions():
-	"""Mapeia posições ocupadas por recursos"""
-	print("📍 Mapeando posições de recursos...")
+func map_resource_positions_with_buffer():
+	"""Mapeia posições ocupadas por recursos INCLUINDO ÁREA DE INFLUÊNCIA"""
+	print("📍 Mapeando posições de recursos com buffer de ", resource_avoidance_radius, " tiles...")
 	
 	occupied_positions.clear()
 	
 	if not resource_generator:
 		return
 	
-	var count = 0
+	var resource_positions = []
+	var direct_count = 0
+	
+	# Primeiro, encontra todas as posições com recursos
 	for x in range(map_width):
 		for y in range(map_height):
 			var pos = Vector2i(x, y)
 			if resource_generator.get_cell_source_id(pos) != -1:
-				occupied_positions[str(pos)] = true
-				count += 1
+				resource_positions.append(pos)
+				direct_count += 1
 	
-	print("🗺️ ", count, " posições de recursos mapeadas")
+	print("🗺️ ", direct_count, " posições com recursos encontradas")
+	
+	# Agora, marca área de influência ao redor de cada recurso
+	var influence_count = 0
+	
+	for resource_pos in resource_positions:
+		# Marca a posição do recurso
+		occupied_positions[str(resource_pos)] = true
+		
+		# Marca área de influência ao redor
+		for dx in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+			for dy in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+				var influence_pos = resource_pos + Vector2i(dx, dy)
+				
+				# Verifica se está dentro dos limites do mapa
+				if (influence_pos.x >= 0 and influence_pos.x < map_width and 
+					influence_pos.y >= 0 and influence_pos.y < map_height):
+					
+					var pos_key = str(influence_pos)
+					if not pos_key in occupied_positions:
+						occupied_positions[pos_key] = true
+						influence_count += 1
+	
+	print("🛡️ ", influence_count, " posições adicionais bloqueadas por área de influência")
+	print("📊 Total de posições bloqueadas: ", occupied_positions.size())
+
+func is_position_in_resource_influence_area(pos: Vector2i) -> bool:
+	"""Verifica se uma posição está na área de influência de recursos"""
+	return str(pos) in occupied_positions
+
+func has_adequate_object_spacing(pos: Vector2i) -> bool:
+	"""Verifica se há espaçamento adequado entre objetos"""
+	if object_spacing <= 0:
+		return true
+	
+	# Verifica se há outros objetos no raio de espaçamento
+	for dx in range(-object_spacing, object_spacing + 1):
+		for dy in range(-object_spacing, object_spacing + 1):
+			if dx == 0 and dy == 0:
+				continue  # Pula a posição central
+			
+			var check_pos = pos + Vector2i(dx, dy)
+			
+			# Verifica se está dentro dos limites
+			if (check_pos.x >= 0 and check_pos.x < map_width and 
+				check_pos.y >= 0 and check_pos.y < map_height):
+				
+				# Verifica se já tem objeto nesta posição
+				if str(check_pos) in placed_objects:
+					return false
+				
+				# Verifica também se já tem objeto colocado no TileMapLayer
+				if get_cell_source_id(check_pos) != -1:
+					return false
+	
+	return true
 
 func set_occupied_positions(positions: Dictionary):
 	"""Define posições ocupadas externamente (usado pelo coordenador)"""
 	occupied_positions = positions
 	print("📍 Recebidas ", positions.size(), " posições ocupadas")
+	
+	# MELHORIA: Expande as posições recebidas com buffer
+	if resource_avoidance_radius > 0:
+		var expanded_positions = {}
+		
+		# Copia as posições originais
+		for pos_str in positions:
+			expanded_positions[pos_str] = true
+		
+		# Expande cada posição com o raio de evitação
+		for pos_str in positions:
+			# Parse da string da posição
+			var pos_clean = pos_str.replace("(", "").replace(")", "")
+			var parts = pos_clean.split(", ")
+			if parts.size() >= 2:
+				var base_pos = Vector2i(int(parts[0]), int(parts[1]))
+				
+				# Adiciona área de influência
+				for dx in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+					for dy in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+						var influence_pos = base_pos + Vector2i(dx, dy)
+						
+						if (influence_pos.x >= 0 and influence_pos.x < map_width and 
+							influence_pos.y >= 0 and influence_pos.y < map_height):
+							expanded_positions[str(influence_pos)] = true
+		
+		occupied_positions = expanded_positions
+		print("🛡️ Posições expandidas com buffer: ", occupied_positions.size())
 
-func is_position_blocked(pos: Vector2i) -> bool:
-	"""Verifica se uma posição está bloqueada por recursos"""
-	# Método 1: Verifica no mapa de posições ocupadas (mais rápido)
-	if str(pos) in occupied_positions:
-		return true
-	
-	# Método 2: Verifica diretamente no ResourceGenerator (redundância)
-	if resource_generator and resource_generator.get_cell_source_id(pos) != -1:
-		return true
-	
-	return false 
-	
-	print("✅ Objetos gerados evitando recursos!")
-
-func place_object_safe(pos: Vector2i, object_name: String, placed_objects: Dictionary) -> bool:
-	"""Coloca um objeto COM VERIFICAÇÃO MÚLTIPLA DE RECURSOS"""
-	if str(pos) in placed_objects:
+func place_object_safe(pos: Vector2i, object_name: String) -> bool:
+	"""Coloca um objeto COM VERIFICAÇÃO MÚLTIPLA"""
+	# Verificação de área de influência de recursos
+	if is_position_in_resource_influence_area(pos):
+		if debug_object_placement:
+			print("🚫 Tentativa de colocar objeto em área de influência de recurso: ", pos)
 		return false
 	
-	# CORREÇÃO: Verificação múltipla para total segurança
-	if is_position_blocked(pos):
+	# Verificação de espaçamento entre objetos
+	if not has_adequate_object_spacing(pos):
 		if debug_object_placement:
-			print("🚫 Tentativa de colocar objeto sobre recurso em: ", pos)
+			print("🚫 Tentativa de colocar objeto muito próximo de outro: ", pos)
 		return false
 	
 	if is_valid_position_for_object(pos, object_name):
@@ -266,7 +354,6 @@ func place_object_safe(pos: Vector2i, object_name: String, placed_objects: Dicti
 		var atlas_coords = config["atlas_coords"]
 		
 		set_cell(pos, 0, atlas_coords)
-		placed_objects[str(pos)] = object_name
 		
 		if debug_object_placement and placed_objects.size() <= 10:
 			print("🌿 Objeto '", object_name, "' colocado em: ", pos)
@@ -280,8 +367,8 @@ func is_valid_position_for_object(pos: Vector2i, object_name: String) -> bool:
 	if not terrain_generator:
 		return false
 	
-	# CORREÇÃO: Verificação de recursos usando método melhorado
-	if is_position_blocked(pos):
+	# VERIFICAÇÃO: Área de influência de recursos
+	if is_position_in_resource_influence_area(pos):
 		return false
 	
 	# Verifica bioma
@@ -359,9 +446,10 @@ func check_collisions_with_resources():
 	
 	var collision_count = 0
 	var sample_positions = []
+	var near_miss_count = 0  # Objetos próximos mas não sobrepostos
 	
-	for x in range(0, map_width, 4):  # Amostragem
-		for y in range(0, map_height, 4):
+	for x in range(0, map_width, 2):  # Amostragem mais densa
+		for y in range(0, map_height, 2):
 			var pos = Vector2i(x, y)
 			
 			var has_resource = resource_generator.get_cell_source_id(pos) != -1
@@ -371,18 +459,80 @@ func check_collisions_with_resources():
 				collision_count += 1
 				if sample_positions.size() < 5:
 					sample_positions.append(pos)
+			elif has_object and not has_resource:
+				# Verifica se há recursos próximos
+				var has_nearby_resource = false
+				for dx in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+					for dy in range(-resource_avoidance_radius, resource_avoidance_radius + 1):
+						var check_pos = pos + Vector2i(dx, dy)
+						if (check_pos.x >= 0 and check_pos.x < map_width and 
+							check_pos.y >= 0 and check_pos.y < map_height):
+							if resource_generator.get_cell_source_id(check_pos) != -1:
+								has_nearby_resource = true
+								break
+					if has_nearby_resource:
+						break
+				
+				if has_nearby_resource:
+					near_miss_count += 1
 	
 	print("🎯 Resultado da verificação:")
-	print("  - Colisões encontradas: ", collision_count)
+	print("  - Colisões diretas encontradas: ", collision_count)
+	print("  - Objetos próximos a recursos (dentro do raio): ", near_miss_count)
 	
 	if collision_count == 0:
-		print("✅ Nenhuma colisão detectada - sistema funcionando!")
+		print("✅ Nenhuma colisão direta detectada!")
+		if near_miss_count > 0:
+			print("ℹ️ ", near_miss_count, " objetos estão próximos a recursos (comportamento esperado)")
 	else:
-		print("⚠️ Colisões encontradas:")
+		print("⚠️ Colisões diretas encontradas:")
 		for pos in sample_positions:
-			print("    ❌ Colisão em: ", pos)
+			print("    ❌ Colisão direta em: ", pos)
 	
 	print("=== FIM VERIFICAÇÃO ===\n")
+
+# === FUNÇÕES DE DEBUG APRIMORADAS ===
+@export_group("Debug Avançado")
+@export var analyze_spacing: bool = false:
+	set(value):
+		if value:
+			analyze_spacing = false
+			analyze_object_spacing()
+
+func analyze_object_spacing():
+	"""Analisa o espaçamento real entre objetos"""
+	print("\n🔍 === ANÁLISE DE ESPAÇAMENTO ===")
+	
+	var object_positions = []
+	var spacing_violations = 0
+	
+	# Coleta todas as posições com objetos
+	for x in range(map_width):
+		for y in range(map_height):
+			var pos = Vector2i(x, y)
+			if get_cell_source_id(pos) != -1:
+				object_positions.append(pos)
+	
+	print("📊 Total de objetos encontrados: ", object_positions.size())
+	
+	# Verifica espaçamento entre todos os pares
+	for i in range(object_positions.size()):
+		for j in range(i + 1, object_positions.size()):
+			var pos1 = object_positions[i]
+			var pos2 = object_positions[j]
+			var distance = pos1.distance_to(pos2)
+			
+			if distance <= object_spacing and distance > 0:
+				spacing_violations += 1
+				if spacing_violations <= 5:  # Mostra apenas os primeiros 5
+					print("⚠️ Violação de espaçamento: ", pos1, " <-> ", pos2, " (distância: ", "%.1f" % distance, ")")
+	
+	if spacing_violations == 0:
+		print("✅ Todos os objetos respeitam o espaçamento mínimo de ", object_spacing)
+	else:
+		print("⚠️ ", spacing_violations, " violações de espaçamento encontradas")
+	
+	print("=== FIM ANÁLISE DE ESPAÇAMENTO ===\n")
 
 func _process(_delta):
 	if not Engine.is_editor_hint():
