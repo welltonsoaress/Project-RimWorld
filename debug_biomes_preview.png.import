@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dw8mrdjkurgcm"
-path="res://.godot/imported/mapData.png-28d7a2f8df16df0d9b628bb406fecb5d.ctex"
+uid="uid://blstxea3dq43y"
+path="res://.godot/imported/debug_biomes_preview.png-7e6a817ab52f9a849df67c12ce429286.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://mapData.png"
-dest_files=["res://.godot/imported/mapData.png-28d7a2f8df16df0d9b628bb406fecb5d.ctex"]
+source_file="res://debug_biomes_preview.png"
+dest_files=["res://.godot/imported/debug_biomes_preview.png-7e6a817ab52f9a849df67c12ce429286.ctex"]
 
 [params]
 
