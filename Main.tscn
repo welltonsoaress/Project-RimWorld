@@ -118,7 +118,6 @@ tile_set = SubResource("TileSet_20pc6")
 rendering_quadrant_size = 32
 script = ExtResource("4_trn2v")
 stone_density = 0.01
-metal_density = 0.005
 resource_cluster_size = 6
 
 [node name="Object" type="TileMap" parent="."]
@@ -146,6 +145,7 @@ script = ExtResource("11_20pc6")
 debug_tiles = true
 debug_specific_position = true
 force_visibility = true
+debug_groups = true
 
 [node name="Visibility" type="Node2D" parent="."]
 script = ExtResource("12_5vvyt")
