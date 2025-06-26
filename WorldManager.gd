@@ -51,7 +51,7 @@ func find_components() -> bool:
 	"""Encontra todos os componentes - VERSÃO CORRIGIDA"""
 	print("🔍 Procurando componentes...")
 	
-	# CORREÇÃO: Busca com caminhos mais específicos
+	# Busca com caminhos mais específicos
 	var terrain_paths = [
 		"Terrain/TerrainMap",
 		"Main/Terrain/TerrainMap", 
@@ -143,13 +143,11 @@ func print_component_status():
 	print("  🎨 ShaderController: ", "✅" if shader_controller else "❌")
 
 func setup_world_parameters():
-	"""Configura parâmetros do mundo em todos os componentes - CORRIGIDO"""
-	# CORREÇÃO: Gera nova seed sempre ou usa a especificada
+	"""Configura parâmetros do mundo em todos os componentes"""
 	var seed_to_use = randi() if world_seed == 0 else world_seed
-	world_seed = seed_to_use  # Atualiza para debug
+	world_seed = seed_to_use
 	
 	if terrain_generator:
-		# CORREÇÃO: Usa apenas propriedades que existem no TerrainGenerator
 		if "map_width" in terrain_generator:
 			terrain_generator.map_width = map_size
 		if "map_height" in terrain_generator:
@@ -159,29 +157,15 @@ func setup_world_parameters():
 		if "terrain_type" in terrain_generator:
 			terrain_generator.terrain_type = world_type
 		
-		# CORREÇÃO: Verifica se propriedades existem antes de definir
-		if "terrain_smoothness" in terrain_generator:
-			terrain_generator.terrain_smoothness = terrain_quality
-		if "noise_frequency" in terrain_generator:
-			terrain_generator.noise_frequency = lerp(0.01, 0.03, terrain_quality)
-		if "noise_octaves" in terrain_generator:
-			terrain_generator.noise_octaves = int(lerp(2.0, 6.0, terrain_quality))
-		
-		# CORREÇÃO: Força escala 2.0 no terrain
 		terrain_generator.scale = Vector2(2.0, 2.0)
 	
 	if resource_generator:
-		# CORREÇÃO: Verifica se propriedades existem
 		if "stone_density" in resource_generator:
-			resource_generator.stone_density = resource_abundance * 0.025  # AUMENTADO
-		if "metal_density" in resource_generator:
-			resource_generator.metal_density = resource_abundance * 0.012  # AUMENTADO
+			resource_generator.stone_density = resource_abundance * 0.025
 		
-		# CORREÇÃO: Força escala 2.0 no resource
 		resource_generator.scale = Vector2(2.0, 2.0)
 	
 	if object_generator:
-		# CORREÇÃO: Verifica se propriedades existem
 		if "grass_density" in object_generator:
 			object_generator.grass_density = vegetation_density * 0.12
 		if "tree_density" in object_generator:
@@ -189,23 +173,21 @@ func setup_world_parameters():
 		if "bush_density" in object_generator:
 			object_generator.bush_density = vegetation_density * 0.03
 		
-		# CORREÇÃO: Força escala 2.0 no object
 		object_generator.scale = Vector2(2.0, 2.0)
 	
 	if shader_controller:
-		# CORREÇÃO: Força escala 2.0 no shader
 		shader_controller.scale = Vector2(2.0, 2.0)
 	
 	print("⚙️ Parâmetros do mundo configurados (seed: ", seed_to_use, ")")
 
 func generate_complete_world():
-	"""Gera o mundo completo em sequência - VERSÃO CORRIGIDA"""
+	"""Gera o mundo completo em sequência CORRIGIDA - Ordem: Terreno -> Recursos -> Objetos"""
 	if is_generating:
 		print("⚠️ Geração já em progresso...")
 		return
 	
 	is_generating = true
-	print("\n🚀 === INICIANDO GERAÇÃO COMPLETA DO MUNDO ===")
+	print("\n🚀 === INICIANDO GERAÇÃO COMPLETA DO MUNDO (ORDEM CORRIGIDA) ===")
 	var start_time = Time.get_ticks_msec()
 	
 	clear_world()
@@ -215,54 +197,76 @@ func generate_complete_world():
 		is_generating = false
 		return
 	
-	# CORREÇÃO: Força escala 2.0 em todos os componentes antes da geração
+	# Força escala correta em todos os componentes antes da geração
 	force_correct_scales()
 	
-	# Etapa 1: Terreno
+	# === ETAPA 1: TERRENO (BASE) ===
 	print("🌍 Etapa 1/4: Gerando terreno...")
-	terrain_generator.GenerateTerrain()
-	# CORREÇÃO: Aguarda mais tempo para garantir que mapData.png seja salvo
-	await get_tree().create_timer(1.5).timeout
+	if terrain_generator.has_method("GenerateTerrain"):
+		terrain_generator.GenerateTerrain()
+	elif terrain_generator.has_method("generate"):
+		terrain_generator.generate()
+	await get_tree().create_timer(1.5).timeout  # Aguarda mapData.png ser salvo
 	
-	# Etapa 2: Shader
+	# === ETAPA 2: SHADER (VISUALIZAÇÃO DO TERRENO) ===
 	if shader_controller:
 		print("🎨 Etapa 2/4: Configurando shader...")
-		
-		# CORREÇÃO: Força escala 2.0 no shader
 		shader_controller.scale = Vector2(2.0, 2.0)
 		
 		if shader_controller.has_method("update_texture"):
 			shader_controller.call_deferred("update_texture")
 		elif shader_controller.has_method("refresh"):
 			shader_controller.call_deferred("refresh")
-		await get_tree().create_timer(1.0).timeout  # AUMENTADO
+		await get_tree().create_timer(1.0).timeout
 	
-	# Etapa 3: Recursos
+	# === ETAPA 3: RECURSOS (PEDRAS - DEVEM VIR ANTES DOS OBJETOS) ===
 	if resource_generator:
-		print("🔧 Etapa 3/4: Gerando recursos...")
+		print("🔧 Etapa 3/4: Gerando recursos (pedras)...")
+		print("  ⚠️ IMPORTANTE: Recursos gerados ANTES dos objetos para evitar sobreposição")
 		
-		# CORREÇÃO: Força escala 2.0 no resource
 		resource_generator.scale = Vector2(2.0, 2.0)
+		if resource_generator.has_method("generate"):
+			resource_generator.generate()
 		
-		resource_generator.generate()
-		await get_tree().create_timer(0.5).timeout
+		# Aguarda mais tempo para garantir que recursos foram totalmente gerados
+		await get_tree().create_timer(1.0).timeout
+		
+		# Verifica se recursos foram realmente gerados
+		var resource_count = count_resources()
+		print("  📊 Recursos gerados: ", resource_count)
+		
+		if resource_count == 0:
+			print("  ⚠️ AVISO: Nenhum recurso gerado - objetos podem não evitar pedras corretamente")
+	else:
+		print("❌ ResourceGenerator não encontrado!")
 	
-	# Etapa 4: Objetos
+	# === ETAPA 4: OBJETOS (POR ÚLTIMO - EVITA PEDRAS) ===
 	if object_generator:
-		print("🌿 Etapa 4/4: Gerando objetos...")
+		print("🌿 Etapa 4/4: Gerando objetos (evitando pedras)...")
+		print("  ✅ Objetos gerados APÓS recursos para evitar sobreposição")
 		
-		# CORREÇÃO: Força escala 2.0 no object
 		object_generator.scale = Vector2(2.0, 2.0)
 		
-		object_generator.generate()
-		await get_tree().create_timer(0.3).timeout
+		# Garante que object_generator encontre resource_generator
+		if object_generator.has_method("find_generators"):
+			object_generator.find_generators()
+		
+		if object_generator.has_method("generate"):
+			object_generator.generate()
+		await get_tree().create_timer(0.5).timeout
+		
+		# Verifica se houve colisões
+		verify_no_collisions()
+	else:
+		print("❌ ObjectGenerator não encontrado!")
 	
 	var total_time = Time.get_ticks_msec() - start_time
-	print("✅ === MUNDO GERADO COM SUCESSO ===")
+	print("✅ === MUNDO GERADO COM SUCESSO (ORDEM CORRIGIDA) ===")
 	print("⏱️ Tempo total: ", total_time, "ms")
 	print("🎯 Seed usado: ", world_seed)
+	print("📋 Ordem: Terreno → Recursos → Objetos (sem sobreposição)")
 	
-	# CORREÇÃO: Força escala final em todos os componentes
+	# Força escala final em todos os componentes
 	call_deferred("force_final_scales")
 	
 	analyze_world()
@@ -301,7 +305,7 @@ func force_final_scales():
 	print("🔧 === APLICANDO ESCALAS FINAIS ===")
 	force_correct_scales()
 	
-	# CORREÇÃO: Força atualização visual
+	# Força atualização visual
 	if terrain_generator:
 		terrain_generator.queue_redraw()
 	if resource_generator:
@@ -317,157 +321,60 @@ func clear_world():
 	"""Limpa todos os componentes"""
 	print("🧹 Limpando mundo...")
 	
-	if terrain_generator:
+	if terrain_generator and terrain_generator.has_method("clear"):
 		terrain_generator.clear()
 	
-	if resource_generator:
+	if resource_generator and resource_generator.has_method("clear"):
 		resource_generator.clear()
 	
-	if object_generator:
+	if object_generator and object_generator.has_method("clear"):
 		object_generator.clear()
 	
-	# CORREÇÃO: Remove mapData.png antigo
+	# Remove mapData.png antigo
 	if FileAccess.file_exists("res://mapData.png"):
 		var dir = DirAccess.open("res://")
 		if dir:
 			dir.remove("res://mapData.png")
 			print("🗑️ mapData.png removido")
-			await get_tree().process_frame  # Aguarda sistema de arquivos
+			await get_tree().process_frame
 
-func analyze_world():
-	"""Analisa o mundo gerado"""
-	print("\n📊 === ANÁLISE DO MUNDO GERADO ===")
-	
-	if not terrain_generator:
-		print("❌ Não é possível analisar sem TerrainGenerator")
-		return
-	
-	var biome_counts = {}
-	var total_tiles = map_size * map_size
-	var sample_size = min(50.0, map_size / 4.0)
-	var step = max(1, float(map_size) / float(sample_size))
-	
-	for x in range(0, map_size, int(step)):
-		for y in range(0, map_size, int(step)):
-			var biome = terrain_generator.get_biome_at_position(x, y)
-			if biome in biome_counts:
-				biome_counts[biome] += 1
-			else:
-				biome_counts[biome] = 1
-	
-	var sample_total = biome_counts.values().reduce(func(a, b): return a + b, 0)
-	print("🌍 Composição do terreno:")
-	for biome in biome_counts:
-		var percentage = float(biome_counts[biome]) / float(sample_total) * 100.0
-		print("  🔹 ", biome.capitalize(), ": ", "%.1f" % percentage, "%")
-	
-	if resource_generator:
-		var resource_count = 0
-		for x in range(0, map_size, int(step)):
-			for y in range(0, map_size, int(step)):
-				if resource_generator.get_cell_source_id(Vector2i(x, y)) != -1:
-					resource_count += 1
-		var resource_density = float(resource_count) / float(sample_total) * 100.0
-		print("🔧 Densidade de recursos: ", "%.2f" % resource_density, "%")
-	
-	if object_generator:
-		var object_count = 0
-		for x in range(0, map_size, int(step)):
-			for y in range(0, map_size, int(step)):
-				if object_generator.get_cell_source_id(Vector2i(x, y)) != -1:
-					object_count += 1
-		var object_density = float(object_count) / float(sample_total) * 100.0
-		print("🌿 Densidade de objetos: ", "%.2f" % object_density, "%")
-	
-	print("=== FIM ANÁLISE ===\n")
-
-# === FUNÇÕES DE DEBUG ===
-@export_group("Debug")
-@export var debug_world_analysis: bool = false:
+# === CORREÇÕES DE EMERGÊNCIA ===
+@export_group("Correções de Emergência")
+@export var fix_collision_issues: bool = false:
 	set(value):
 		if value:
-			debug_world_analysis = false
-			detailed_world_analysis()
+			fix_collision_issues = false
+			emergency_fix_collisions()
 
-@export var debug_component_paths: bool = false:
-	set(value):
-		if value:
-			debug_component_paths = false
-			debug_scene_structure()
-
-func detailed_world_analysis():
-	"""Análise detalhada do mundo"""
-	print("\n🔍 === ANÁLISE DETALHADA DO MUNDO ===")
+func emergency_fix_collisions():
+	"""Correção de emergência para colisões objeto-recurso"""
+	print("\n🚨 === CORREÇÃO DE EMERGÊNCIA - COLISÕES ===")
 	
-	if not terrain_generator:
-		print("❌ TerrainGenerator não disponível")
+	if not resource_generator or not object_generator:
+		print("❌ Geradores não encontrados")
 		return
 	
-	var detailed_analysis = {}
+	var removed_objects = 0
+	var map_width = terrain_generator.get("map_width") if terrain_generator and "map_width" in terrain_generator else 128
+	var map_height = terrain_generator.get("map_height") if terrain_generator and "map_height" in terrain_generator else 128
 	
-	for x in range(0, map_size, 4):
-		for y in range(0, map_size, 4):
-			var biome = terrain_generator.get_biome_at_position(x, y)
+	# Remove objetos que estão sobre recursos
+	for x in range(map_width):
+		for y in range(map_height):
+			var pos = Vector2i(x, y)
 			
-			if not biome in detailed_analysis:
-				detailed_analysis[biome] = {
-					"positions": [],
-					"resources": 0,
-					"objects": 0
-				}
+			var has_resource = resource_generator.get_cell_source_id(pos) != -1
+			var has_object = object_generator.get_cell_source_id(pos) != -1
 			
-			detailed_analysis[biome]["positions"].append(Vector2i(x, y))
-			
-			if resource_generator and resource_generator.get_cell_source_id(Vector2i(x, y)) != -1:
-				detailed_analysis[biome]["resources"] += 1
-			
-			if object_generator and object_generator.get_cell_source_id(Vector2i(x, y)) != -1:
-				detailed_analysis[biome]["objects"] += 1
+			if has_resource and has_object:
+				object_generator.erase_cell(pos)
+				removed_objects += 1
 	
-	for biome in detailed_analysis:
-		var data = detailed_analysis[biome]
-		var tile_count = data["positions"].size()
-		var resource_density = float(data["resources"]) / float(tile_count) * 100.0 if tile_count > 0 else 0.0
-		var object_density = float(data["objects"]) / float(tile_count) * 100.0 if tile_count > 0 else 0.0
-		
-		print("🔹 ", biome.capitalize(), ":")
-		print("    Tiles: ", tile_count)
-		print("    Recursos: ", data["resources"], " (", "%.1f" % resource_density, "%)")
-		print("    Objetos: ", data["objects"], " (", "%.1f" % object_density, "%)")
-	
-	print("=== FIM ANÁLISE DETALHADA ===\n")
+	print("🔧 Objetos removidos de cima de recursos: ", removed_objects)
+	print("✅ Correção concluída")
+	print("=== FIM CORREÇÃO ===\n")
 
-func debug_scene_structure():
-	"""Debug da estrutura da cena"""
-	print("\n🔍 === ESTRUTURA DA CENA ===")
-	print_node_tree(self, 0)
-	print("=== FIM ESTRUTURA ===\n")
-
-func print_node_tree(node: Node, depth: int):
-	"""Imprime árvore de nós"""
-	var indent = ""
-	for i in range(depth):
-		indent += "  "
-	
-	var node_info = indent + "📁 " + node.name + " (" + node.get_class() + ")"
-	if node.get_script():
-		node_info += " [Script: " + node.get_script().resource_path.get_file() + "]"
-	
-	print(node_info)
-	
-	for child in node.get_children():
-		print_node_tree(child, depth + 1)
-
-func _on_generate_button_pressed():
-	"""Compatibilidade com UI"""
-	generate_complete_world()
-
-func force_regenerate():
-	"""Força regeneração completa"""
-	clear_world()
-	generate_complete_world()
-
-# CORREÇÃO: Sistema para manter escalas corretas
+# Sistema para manter posicionamento correto
 func _process(_delta):
 	if not Engine.is_editor_hint() and not is_generating:
 		# Verifica e corrige escalas automaticamente
@@ -488,19 +395,327 @@ func _process(_delta):
 		if shader_controller and shader_controller.scale != Vector2(2.0, 2.0):
 			shader_controller.scale = Vector2(2.0, 2.0)
 			needs_correction = true
-		
-		if needs_correction:
-			print("🔧 Escalas corrigidas automaticamente")
 
-func _input(event):
-	if Engine.is_editor_hint():
+func _on_generate_button_pressed():
+	"""Compatibilidade com UI"""
+	generate_complete_world()
+
+func force_regenerate():
+	"""Força regeneração completa"""
+	clear_world()
+	generate_complete_world()
+	"""Gera o mundo completo em sequência CORRIGIDA - Ordem: Terreno -> Recursos -> Objetos"""
+	if is_generating:
+		print("⚠️ Geração já em progresso...")
 		return
 	
-	if event.is_action_pressed("ui_cancel"):  # ESC
-		detailed_world_analysis()
-	elif event.is_action_pressed("ui_accept"):  # Enter
-		force_regenerate()
-	elif event.is_action_pressed("ui_select"):  # Space
-		debug_scene_structure()
-	elif event.is_action_pressed("ui_focus_next"):  # Tab
-		force_correct_scales()
+	is_generating = true
+	print("\n🚀 === INICIANDO GERAÇÃO COMPLETA DO MUNDO (ORDEM CORRIGIDA) ===")
+	var start_time = Time.get_ticks_msec()
+	
+	clear_world()
+	
+	if not terrain_generator:
+		print("❌ TerrainGenerator não encontrado! Abortando geração.")
+		is_generating = false
+		return
+	
+	# CORREÇÃO: Força escala correta em todos os componentes antes da geração
+	force_correct_scales()
+	
+	# === ETAPA 1: TERRENO (BASE) ===
+	print("🌍 Etapa 1/4: Gerando terreno...")
+	terrain_generator.GenerateTerrain()
+	await get_tree().create_timer(1.5).timeout  # Aguarda mapData.png ser salvo
+	
+	# === ETAPA 2: SHADER (VISUALIZAÇÃO DO TERRENO) ===
+	if shader_controller:
+		print("🎨 Etapa 2/4: Configurando shader...")
+		shader_controller.scale = Vector2(2.0, 2.0)
+		
+		if shader_controller.has_method("update_texture"):
+			shader_controller.call_deferred("update_texture")
+		elif shader_controller.has_method("refresh"):
+			shader_controller.call_deferred("refresh")
+		await get_tree().create_timer(1.0).timeout
+	
+	# === ETAPA 3: RECURSOS (PEDRAS - DEVEM VIR ANTES DOS OBJETOS) ===
+	if resource_generator:
+		print("🔧 Etapa 3/4: Gerando recursos (pedras)...")
+		print("  ⚠️ IMPORTANTE: Recursos gerados ANTES dos objetos para evitar sobreposição")
+		
+		resource_generator.scale = Vector2(2.0, 2.0)
+		resource_generator.generate()
+		
+		# CORREÇÃO: Aguarda mais tempo para garantir que recursos foram totalmente gerados
+		await get_tree().create_timer(1.0).timeout
+		
+		# CORREÇÃO: Verifica se recursos foram realmente gerados
+		var resource_count = count_resources()
+		print("  📊 Recursos gerados: ", resource_count)
+		
+		if resource_count == 0:
+			print("  ⚠️ AVISO: Nenhum recurso gerado - objetos podem não evitar pedras corretamente")
+	else:
+		print("❌ ResourceGenerator não encontrado!")
+	
+	# === ETAPA 4: OBJETOS (POR ÚLTIMO - EVITA PEDRAS) ===
+	if object_generator:
+		print("🌿 Etapa 4/4: Gerando objetos (evitando pedras)...")
+		print("  ✅ Objetos gerados APÓS recursos para evitar sobreposição")
+		
+		object_generator.scale = Vector2(2.0, 2.0)
+		
+		# CORREÇÃO: Garante que object_generator encontre resource_generator
+		if object_generator.has_method("find_generators"):
+			object_generator.find_generators()
+		
+		object_generator.generate()
+		await get_tree().create_timer(0.5).timeout
+		
+		# CORREÇÃO: Verifica se houve colisões
+		verify_no_collisions()
+	else:
+		print("❌ ObjectGenerator não encontrado!")
+	
+	var total_time = Time.get_ticks_msec() - start_time
+	print("✅ === MUNDO GERADO COM SUCESSO (ORDEM CORRIGIDA) ===")
+	print("⏱️ Tempo total: ", total_time, "ms")
+	print("🎯 Seed usado: ", world_seed)
+	print("📋 Ordem: Terreno → Recursos → Objetos (sem sobreposição)")
+	
+	# CORREÇÃO: Força escala final em todos os componentes
+	call_deferred("force_final_scales")
+	
+	analyze_world()
+	is_generating = false
+
+# === FUNÇÕES AUXILIARES PARA VERIFICAÇÃO ===
+
+func count_resources() -> int:
+	"""Conta quantos recursos foram gerados"""
+	if not resource_generator:
+		return 0
+	
+	var count = 0
+	var map_width = terrain_generator.get("map_width") if "map_width" in terrain_generator else 128
+	var map_height = terrain_generator.get("map_height") if "map_height" in terrain_generator else 128
+	
+	# Amostragem rápida para não impactar performance
+	for x in range(0, map_width, 4):
+		for y in range(0, map_height, 4):
+			if resource_generator.get_cell_source_id(Vector2i(x, y)) != -1:
+				count += 1
+	
+	return count * 16  # Multiplica pela amostragem (4x4 = 16)
+
+func verify_no_collisions():
+	"""Verifica se há colisões entre objetos e recursos"""
+	if not resource_generator or not object_generator:
+		print("  ⚠️ Não foi possível verificar colisões - geradores não encontrados")
+		return
+	
+	var collision_count = 0
+	var sample_size = 200  # Amostra maior para verificação
+	
+	print("  🔍 Verificando colisões objeto-recurso...")
+	
+	for i in range(sample_size):
+		var x = randi_range(5, 123)
+		var y = randi_range(5, 123)
+		var pos = Vector2i(x, y)
+		
+		var has_resource = resource_generator.get_cell_source_id(pos) != -1
+		var has_object = object_generator.get_cell_source_id(pos) != -1
+		
+		if has_resource and has_object:
+			collision_count += 1
+			if collision_count <= 3:  # Mostra apenas as primeiras 3
+				print("    ❌ Colisão em: ", pos)
+	
+	if collision_count == 0:
+		print("  ✅ Nenhuma colisão detectada - objetos evitaram pedras corretamente!")
+	else:
+		print("  ⚠️ ", collision_count, " colisões detectadas em ", sample_size, " amostras")
+		print("  🔧 Sugestão: Verifique ordem de geração ou aguarde mais tempo entre etapas")
+
+# === FUNÇÃO MELHORADA DE ANÁLISE ===
+
+func analyze_world():
+	"""Analisa o mundo gerado - VERSÃO MELHORADA"""
+	print("\n📊 === ANÁLISE DO MUNDO GERADO ===")
+	
+	if not terrain_generator:
+		print("❌ Não é possível analisar sem TerrainGenerator")
+		return
+	
+	var biome_counts = {}
+	var resource_counts = {}
+	var object_counts = {}
+	var total_tiles = map_size * map_size
+	var sample_size = min(50.0, map_size / 4.0)
+	var step = max(1, float(map_size) / float(sample_size))
+	
+	# Análise por amostragem
+	for x in range(0, map_size, int(step)):
+		for y in range(0, map_size, int(step)):
+			var pos = Vector2i(x, y)
+			
+			# Conta biomas
+			var biome = terrain_generator.get_biome_at_position(x, y)
+			if biome in biome_counts:
+				biome_counts[biome] += 1
+			else:
+				biome_counts[biome] = 1
+			
+			# Conta recursos
+			if resource_generator and resource_generator.get_cell_source_id(pos) != -1:
+				if biome in resource_counts:
+					resource_counts[biome] += 1
+				else:
+					resource_counts[biome] = 1
+			
+			# Conta objetos
+			if object_generator and object_generator.get_cell_source_id(pos) != -1:
+				if biome in object_counts:
+					object_counts[biome] += 1
+				else:
+					object_counts[biome] = 1
+	
+	var sample_total = biome_counts.values().reduce(func(a, b): return a + b, 0)
+	
+	# Análise de terreno
+	print("🌍 Composição do terreno:")
+	for biome in biome_counts:
+		var percentage = float(biome_counts[biome]) / float(sample_total) * 100.0
+		print("  🔹 ", biome.capitalize(), ": ", "%.1f" % percentage, "%")
+	
+	# Análise de recursos
+	if resource_generator:
+		var total_resources = resource_counts.values().reduce(func(a, b): return a + b, 0)
+		var resource_density = float(total_resources) / float(sample_total) * 100.0
+		print("🔧 Recursos:")
+		print("  📊 Densidade total: ", "%.2f" % resource_density, "%")
+		
+		if resource_counts.size() > 0:
+			print("  📍 Distribuição por bioma:")
+			for biome in resource_counts:
+				var biome_total = biome_counts.get(biome, 0)
+				var biome_resources = resource_counts[biome]
+				var biome_density = float(biome_resources) / float(biome_total) * 100.0 if biome_total > 0 else 0.0
+				print("    🔹 ", biome.capitalize(), ": ", "%.1f" % biome_density, "% (", biome_resources, " recursos)")
+	
+	# Análise de objetos
+	if object_generator:
+		var total_objects = object_counts.values().reduce(func(a, b): return a + b, 0)
+		var object_density = float(total_objects) / float(sample_total) * 100.0
+		print("🌿 Objetos:")
+		print("  📊 Densidade total: ", "%.2f" % object_density, "%")
+		
+		if object_counts.size() > 0:
+			print("  📍 Distribuição por bioma:")
+			for biome in object_counts:
+				var biome_total = biome_counts.get(biome, 0)
+				var biome_objects = object_counts[biome]
+				var biome_density = float(biome_objects) / float(biome_total) * 100.0 if biome_total > 0 else 0.0
+				print("    🔹 ", biome.capitalize(), ": ", "%.1f" % biome_density, "% (", biome_objects, " objetos)")
+	
+	# Verificação final de integridade
+	print("🔍 Verificação de integridade:")
+	verify_layer_integrity()
+	
+	print("=== FIM ANÁLISE ===\n")
+
+func verify_layer_integrity():
+	"""Verifica integridade das camadas"""
+	var issues = []
+	
+	# Verifica posicionamento
+	if terrain_generator and terrain_generator.position != Vector2(0, 0):
+		issues.append("TerrainMap fora de posição: " + str(terrain_generator.position))
+	
+	if resource_generator and resource_generator.position != Vector2(0, 0):
+		issues.append("ResourceMap fora de posição: " + str(resource_generator.position))
+	
+	if object_generator and object_generator.position != Vector2(0, 0):
+		issues.append("ObjectMap fora de posição: " + str(object_generator.position))
+	
+	# Verifica escala
+	var expected_scale = Vector2(2.0, 2.0)
+	if terrain_generator and terrain_generator.scale != expected_scale:
+		issues.append("TerrainMap escala incorreta: " + str(terrain_generator.scale))
+	
+	if resource_generator and resource_generator.scale != expected_scale:
+		issues.append("ResourceMap escala incorreta: " + str(resource_generator.scale))
+	
+	if object_generator and object_generator.scale != expected_scale:
+		issues.append("ObjectMap escala incorreta: " + str(object_generator.scale))
+	
+	# Verifica z-index
+	if terrain_generator and terrain_generator.z_index != 0:
+		issues.append("TerrainMap z-index incorreto: " + str(terrain_generator.z_index))
+	
+	if resource_generator and resource_generator.z_index != 1:
+		issues.append("ResourceMap z-index incorreto: " + str(resource_generator.z_index))
+	
+	if object_generator and object_generator.z_index != 2:
+		issues.append("ObjectMap z-index incorreto: " + str(object_generator.z_index))
+	
+	# Reporta resultados
+	if issues.size() == 0:
+		print("  ✅ Todas as camadas estão corretamente posicionadas")
+	else:
+		print("  ⚠️ Problemas encontrados:")
+		for issue in issues:
+			print("    - ", issue)
+
+# === FUNÇÃO PARA CORRIGIR PROBLEMAS ===
+@export_group("Correções de Emergência")
+# === CONFIGURAÇÕES DE DEBUG ===
+@export_group("Debug Geração")
+@export var debug_generation_order: bool = false
+@export var pause_between_steps: float = 2.0
+
+# Função de geração com debug (opcional)
+func generate_complete_world_debug():
+	"""Versão com debug detalhado da geração"""
+	if not debug_generation_order:
+		generate_complete_world()
+		return
+	
+	print("\n🔍 === GERAÇÃO COM DEBUG DETALHADO ===")
+	
+	# Similar à função normal, mas com paradas e verificações extras
+	is_generating = true
+	clear_world()
+	
+	print("⏸️ Pausa entre etapas: ", pause_between_steps, "s")
+	
+	# Etapa 1: Terreno
+	print("\n1️⃣ === GERANDO TERRENO ===")
+	terrain_generator.GenerateTerrain()
+	await get_tree().create_timer(pause_between_steps).timeout
+	print("✅ Terreno gerado. Pressione qualquer tecla para continuar...")
+	
+	# Etapa 2: Shader  
+	print("\n2️⃣ === CONFIGURANDO SHADER ===")
+	if shader_controller:
+		shader_controller.update_texture()
+	await get_tree().create_timer(pause_between_steps).timeout
+	
+	# Etapa 3: Recursos
+	print("\n3️⃣ === GERANDO RECURSOS ===")
+	if resource_generator:
+		resource_generator.generate()
+		var resource_count = count_resources()
+		print("📊 Recursos gerados: ", resource_count)
+	await get_tree().create_timer(pause_between_steps).timeout
+	
+	# Etapa 4: Objetos
+	print("\n4️⃣ === GERANDO OBJETOS ===")
+	if object_generator:
+		object_generator.generate()
+		verify_no_collisions()
+	
+	print("\n✅ === GERAÇÃO DEBUG CONCLUÍDA ===")
+	is_generating = false

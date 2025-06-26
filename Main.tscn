@@ -73,9 +73,6 @@ shader_parameter/mapData = SubResource("ImageTexture_c6i3y")
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_wkp8b")
-world_type = "Ilha"
-debug_world_analysis = true
-debug_component_paths = true
 
 [node name="UI" type="CanvasLayer" parent="."]
 
@@ -114,11 +111,16 @@ format = 2
 
 [node name="ResourceMap" type="TileMapLayer" parent="Resource"]
 z_index = 1
+scale = Vector2(2, 2)
 tile_set = SubResource("TileSet_20pc6")
 rendering_quadrant_size = 32
 script = ExtResource("4_trn2v")
-stone_density = 0.01
-resource_cluster_size = 6
+formation_compactness = 0.8
+hills_formation_multiplier = 2.5
+desert_formation_multiplier = 1.2
+grassland_formation_multiplier = 0.4
+debug_generation = true
+force_generation_everywhere = null
 
 [node name="Object" type="TileMap" parent="."]
 format = 2
@@ -127,6 +129,9 @@ format = 2
 scale = Vector2(2, 2)
 tile_set = SubResource("TileSet_4d7sh")
 script = ExtResource("5_03owx")
+debug_object_placement = null
+analyze_object_coverage = null
+test_resource_collision = null
 
 [node name="ShaderTerrain" type="Sprite2D" parent="."]
 z_index = -1

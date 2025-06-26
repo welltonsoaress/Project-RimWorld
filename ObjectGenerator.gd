@@ -27,6 +27,9 @@ extends TileMapLayer
 @export_range(0.0, 2.0) var grassland_bonus: float = 1.5
 @export_range(0.0, 1.0) var desert_penalty: float = 0.1
 
+@export_group("Debug")
+@export var debug_object_placement: bool = false
+
 # === SISTEMA DE OBJETOS ===
 var terrain_generator: TileMapLayer
 var resource_generator: TileMapLayer
@@ -81,7 +84,8 @@ func _ready():
 	
 	if not Engine.is_editor_hint():
 		await get_tree().process_frame
-		await get_tree().create_timer(1.0).timeout  # Aguarda terreno e recursos
+		# CORREÇÃO: Aguarda muito mais tempo para garantir que recursos foram gerados primeiro
+		await get_tree().create_timer(2.0).timeout
 		generate()
 
 func setup_tileset():
@@ -114,12 +118,11 @@ func find_generators():
 	"""Encontra outros geradores na cena"""
 	print("🔍 ObjectGenerator buscando dependências...")
 	
-	# Busca TerrainGenerator com caminhos mais específicos baseado na estrutura vista
+	# Busca TerrainGenerator
 	var terrain_paths = [
-		"../../Terrain/TerrainMap",  # Estrutura vista no debug
+		"../../Terrain/TerrainMap",
 		"../Terrain/TerrainMap",
-		"/root/Main/Terrain/TerrainMap",
-		"../../../Terrain/TerrainMap"
+		"/root/Main/Terrain/TerrainMap"
 	]
 	
 	for path in terrain_paths:
@@ -129,20 +132,13 @@ func find_generators():
 			print("✅ TerrainGenerator encontrado em: ", path)
 			break
 	
-	# Se não encontrou, busca por grupo
 	if not terrain_generator:
 		var terrain_nodes = get_tree().get_nodes_in_group("terrain")
 		if terrain_nodes.size() > 0:
 			terrain_generator = terrain_nodes[0]
 			print("✅ TerrainGenerator encontrado via grupo: ", terrain_generator.get_path())
 	
-	# Busca recursiva como último recurso
-	if not terrain_generator:
-		terrain_generator = find_terrain_recursive(get_tree().root)
-		if terrain_generator:
-			print("✅ TerrainGenerator encontrado via busca recursiva: ", terrain_generator.get_path())
-	
-	# Busca ResourceGenerator
+	# CORREÇÃO: Busca ResourceGenerator de forma mais robusta
 	var resource_paths = [
 		"../../Resource/ResourceMap",
 		"../Resource/ResourceMap",
@@ -157,80 +153,49 @@ func find_generators():
 			break
 	
 	if not resource_generator:
-		resource_generator = find_resource_recursive(get_tree().root)
+		var resource_nodes = get_tree().get_nodes_in_group("resources")
+		if resource_nodes.size() > 0:
+			resource_generator = resource_nodes[0]
+			print("✅ ResourceGenerator encontrado via grupo: ", resource_generator.get_path())
 	
 	# Verifica resultados
 	if terrain_generator:
 		print("✅ TerrainGenerator configurado para ObjectGenerator")
 	else:
 		print("❌ ERRO: TerrainGenerator não encontrado!")
-		print("🔍 Estrutura atual vista:")
-		debug_scene_structure()
 	
 	if resource_generator:
 		print("✅ ResourceGenerator encontrado para ObjectGenerator")
-
-func find_terrain_recursive(node: Node) -> TileMapLayer:
-	"""Busca recursiva pelo TerrainGenerator"""
-	if node.name == "TerrainMap" and node is TileMapLayer:
-		return node
-	
-	for child in node.get_children():
-		var result = find_terrain_recursive(child)
-		if result:
-			return result
-	
-	return null
-
-func find_resource_recursive(node: Node) -> TileMapLayer:
-	"""Busca recursiva pelo ResourceGenerator"""
-	if node.name == "ResourceMap" and node is TileMapLayer:
-		return node
-	
-	for child in node.get_children():
-		var result = find_resource_recursive(child)
-		if result:
-			return result
-	
-	return null
+	else:
+		print("❌ AVISO: ResourceGenerator não encontrado - objetos podem aparecer sobre pedras!")
 
 func generate():
-	"""Gera objetos baseado no terreno e recursos"""
-	print("🌿 Gerando objetos...")
+	"""Gera objetos baseado no terreno e recursos - VERSÃO CORRIGIDA"""
+	print("🌿 Gerando objetos (evitando pedras)...")
 	clear()
 	
-	# CORREÇÃO: Sempre re-busca antes de gerar
-	if not terrain_generator:
+	# CORREÇÃO: Re-busca geradores antes de gerar
+	if not terrain_generator or not resource_generator:
 		find_generators()
 	
 	if not terrain_generator:
 		print("❌ TerrainGenerator não encontrado!")
-		print("🔧 Tentando busca de emergência...")
-		
-		# Busca de emergência mais ampla
-		var all_nodes = get_tree().get_nodes_in_group("terrain")
-		if all_nodes.is_empty():
-			# Busca por script específico
-			terrain_generator = find_node_with_script("TerrainGenerator")
-		else:
-			terrain_generator = all_nodes[0]
-		
-		if not terrain_generator:
-			print("❌ Impossível gerar objetos sem TerrainGenerator!")
-			return
-		else:
-			print("✅ TerrainGenerator encontrado via busca de emergência")
+		return
 	
-	# CORREÇÃO: Força visibilidade
+	# CORREÇÃO: Força visibilidade e posicionamento
 	visible = true
 	enabled = true
 	z_index = 2
+	scale = Vector2(2.0, 2.0)
+	position = Vector2(0, 0)
 	modulate = Color.WHITE
 	
 	var map_width = terrain_generator.get("map_width") if "map_width" in terrain_generator else 128
 	var map_height = terrain_generator.get("map_height") if "map_height" in terrain_generator else 128
 	var placed_objects = {}
 	var object_stats = {}
+	var blocked_by_resources = 0
+	var blocked_by_water = 0
 	
 	print("📍 Gerando objetos em mapa ", map_width, "x", map_height)
 	
@@ -238,7 +203,7 @@ func generate():
 	for object_name in object_configs:
 		object_stats[object_name] = 0
 	
-	# Gera objetos por tipo
+	# CORREÇÃO: Gera objetos por tipo, verificando recursos primeiro
 	for object_name in object_configs:
 		var config = object_configs[object_name]
 		var base_chance = config["base_chance"]
@@ -251,18 +216,25 @@ func generate():
 				if str(pos) in placed_objects:
 					continue
 				
-				# Verifica se há recurso no local
+				# CORREÇÃO PRINCIPAL: Verifica se há pedra/recurso no local PRIMEIRO
 				if resource_generator and resource_generator.get_cell_source_id(pos) != -1:
+					blocked_by_resources += 1
+					if debug_object_placement and blocked_by_resources <= 5:
+						print("🚫 Objeto bloqueado por recurso em: ", pos)
 					continue
 				
-				# Obtém bioma com fallback robusto
+				# CORREÇÃO: Verifica se é água (oceano)
 				var biome = "grassland"  # Fallback
 				if terrain_generator.has_method("get_biome_at_position"):
 					biome = terrain_generator.get_biome_at_position(x, y)
 				else:
-					# Fallback baseado no tile
 					var terrain_tile = terrain_generator.get_cell_atlas_coords(pos)
 					biome = get_biome_from_terrain_tile(terrain_tile)
+				
+				# CORREÇÃO: Bloqueia objetos em água
+				if biome == "ocean":
+					blocked_by_water += 1
+					continue
 				
 				# Calcula chance modificada por bioma
 				var biome_preference = config["biome_preferences"].get(biome, 0.0)
@@ -270,42 +242,62 @@ func generate():
 				
 				# Testa geração
 				if randf() < final_chance:
-					if place_object(pos, object_name, placed_objects):
+					if place_object_safe(pos, object_name, placed_objects):
 						object_stats[object_name] += 1
 	
+	print("🚫 Objetos bloqueados - Recursos: ", blocked_by_resources, " Água: ", blocked_by_water)
 	print_object_statistics(object_stats, map_width * map_height)
-	print("✅ Objetos gerados com sucesso!")
+	print("✅ Objetos gerados evitando pedras!")
 
-func place_object(pos: Vector2i, object_name: String, placed_objects: Dictionary) -> bool:
-	"""Coloca um objeto em uma posição"""
+func place_object_safe(pos: Vector2i, object_name: String, placed_objects: Dictionary) -> bool:
+	"""Coloca um objeto em uma posição COM VERIFICAÇÃO DE RECURSOS"""
 	if str(pos) in placed_objects:
 		return false
 	
-	if is_valid_position_for_object(pos, object_name):
+	# CORREÇÃO: Verificação dupla de recursos
+	if resource_generator and resource_generator.get_cell_source_id(pos) != -1:
+		if debug_object_placement:
+			print("🚫 Tentativa de colocar objeto sobre recurso em: ", pos)
+		return false
+	
+	if is_valid_position_for_object_safe(pos, object_name):
 		var config = object_configs[object_name]
 		var atlas_coords = config["atlas_coords"]
 		
 		set_cell(pos, 0, atlas_coords)
 		placed_objects[str(pos)] = object_name
+		
+		if debug_object_placement and placed_objects.size() <= 10:
+			print("🌿 Objeto '", object_name, "' colocado em: ", pos)
+		
 		return true
 	
 	return false
 
-func is_valid_position_for_object(pos: Vector2i, object_name: String) -> bool:
-	"""Verifica se uma posição é válida para um objeto"""
+func is_valid_position_for_object_safe(pos: Vector2i, object_name: String) -> bool:
+	"""Verifica se uma posição é válida para um objeto - VERSÃO SEGURA"""
 	if not terrain_generator:
 		return false
 	
-	# Verifica se há recurso no local
+	# CORREÇÃO: Verificação tripla de recursos (para garantir)
 	if resource_generator and resource_generator.get_cell_source_id(pos) != -1:
 		return false
 	
 	# Verifica bioma
-	var biome = terrain_generator.get_biome_at_position(pos.x, pos.y)
+	var biome = "grassland"
+	if terrain_generator.has_method("get_biome_at_position"):
+		biome = terrain_generator.get_biome_at_position(pos.x, pos.y)
+	else:
+		var terrain_tile = terrain_generator.get_cell_atlas_coords(pos)
+		biome = get_biome_from_terrain_tile(terrain_tile)
+	
+	# CORREÇÃO: Não permite objetos em água
+	if biome == "ocean":
+		return false
+	
 	var config = object_configs[object_name]
 	var biome_preference = config["biome_preferences"].get(biome, 0.0)
 	
-	# Se preferência é 0, não pode colocar
 	return biome_preference > 0.0
 
 func print_object_statistics(stats: Dictionary, total_tiles: int):
@@ -343,7 +335,6 @@ func get_objects_near_position(center_pos: Vector2i, radius: int = 5) -> Array:
 					"blocks_movement": object_configs.get(object_type, {}).get("blocks_movement", false)
 				})
 	
-	# Ordena por distância
 	nearby_objects.sort_custom(func(a, b): return a["distance"] < b["distance"])
 	return nearby_objects
 
@@ -377,24 +368,29 @@ func get_coverage_by_biome() -> Dictionary:
 				biome = get_biome_from_terrain_tile(terrain_tile)
 			
 			if not biome in coverage:
-				coverage[biome] = {"total": 0, "objects": 0}
+				coverage[biome] = {"total": 0, "objects": 0, "blocked_by_resources": 0}
 			
 			coverage[biome]["total"] += 1
 			
+			# Verifica se tem objeto
 			if get_cell_source_id(Vector2i(x, y)) != -1:
 				coverage[biome]["objects"] += 1
+			
+			# Verifica se foi bloqueado por recurso
+			if resource_generator and resource_generator.get_cell_source_id(Vector2i(x, y)) != -1:
+				coverage[biome]["blocked_by_resources"] += 1
 	
 	# Calcula percentuais
 	for biome in coverage:
 		var data = coverage[biome]
 		if data["total"] > 0:
 			data["coverage_percent"] = float(data["objects"]) / float(data["total"]) * 100.0
+			data["blocked_percent"] = float(data["blocked_by_resources"]) / float(data["total"]) * 100.0
 		else:
 			data["coverage_percent"] = 0.0
+			data["blocked_percent"] = 0.0
 	
 	return coverage
-
-# === FUNÇÕES QUE ESTAVAM FALTANDO ===
 
 func get_biome_from_terrain_tile(terrain_tile: Vector2i) -> String:
 	"""Converte tile de terreno em nome de bioma"""
@@ -416,36 +412,77 @@ func get_biome_from_terrain_tile(terrain_tile: Vector2i) -> String:
 		_:
 			return "grassland"
 
-func find_node_with_script(script_name: String) -> TileMapLayer:
-	"""Busca nó por nome de script"""
-	return find_script_recursive(get_tree().root, script_name)
+# === FUNÇÕES DE DEBUG ===
+@export_group("Debug e Análise")
+@export var analyze_object_coverage: bool = false:
+	set(value):
+		if value:
+			analyze_object_coverage = false
+			analyze_coverage_vs_resources()
 
-func find_script_recursive(node: Node, script_name: String) -> TileMapLayer:
-	"""Busca recursiva por script"""
-	if node is TileMapLayer and node.get_script() and node.get_script().resource_path.get_file().begins_with(script_name):
-		return node
-	
-	for child in node.get_children():
-		var result = find_script_recursive(child, script_name)
-		if result:
-			return result
-	
-	return null
+@export var test_resource_collision: bool = false:
+	set(value):
+		if value:
+			test_resource_collision = false
+			test_collision_detection()
 
-func debug_scene_structure():
-	"""Debug da estrutura da cena"""
-	print("🔍 Estrutura vista do ObjectGenerator:")
-	print("  - Nó atual: ", get_path())
-	@warning_ignore("incompatible_ternary")
-	print("  - Pai: ", get_parent().get_path() if get_parent() else "N/A")
-	@warning_ignore("incompatible_ternary")
-	print("  - Avô: ", get_parent().get_parent().get_path() if get_parent() and get_parent().get_parent() else "N/A")
+func analyze_coverage_vs_resources():
+	"""Analisa cobertura de objetos vs recursos por bioma"""
+	print("\n📊 === ANÁLISE OBJETOS VS RECURSOS ===")
 	
-	var main_node = get_tree().root.get_node_or_null("Main")
-	if main_node:
-		print("  - Main encontrado: ", main_node.get_path())
-		var terrain_node = main_node.get_node_or_null("Terrain/TerrainMap")
-		if terrain_node:
-			print("  - TerrainMap em Main: ", terrain_node.get_path())
-		else:
-			print("  - TerrainMap NÃO encontrado em Main/Terrain/TerrainMap")
+	var coverage = get_coverage_by_biome()
+	
+	for biome in coverage:
+		var data = coverage[biome]
+		print("🌍 ", biome.capitalize(), ":")
+		print("  - Total tiles: ", data["total"])
+		print("  - Objetos: ", data["objects"], " (", "%.1f" % data["coverage_percent"], "%)")
+		print("  - Bloqueados por recursos: ", data["blocked_by_resources"], " (", "%.1f" % data["blocked_percent"], "%)")
+		
+		var available_for_objects = data["total"] - data["blocked_by_resources"]
+		if available_for_objects > 0:
+			var effective_coverage = float(data["objects"]) / float(available_for_objects) * 100.0
+			print("  - Cobertura efetiva: ", "%.1f" % effective_coverage, "% (excluindo recursos)")
+	
+	print("=== FIM ANÁLISE ===\n")
+
+func test_collision_detection():
+	"""Testa detecção de colisão com recursos"""
+	print("\n🧪 === TESTE DETECÇÃO DE COLISÃO ===")
+	
+	if not resource_generator:
+		print("❌ ResourceGenerator não encontrado para teste")
+		return
+	
+	var collision_count = 0
+	var sample_size = 100
+	
+	for i in range(sample_size):
+		var x = randi_range(10, 118)
+		var y = randi_range(10, 118)
+		var pos = Vector2i(x, y)
+		
+		var has_resource = resource_generator.get_cell_source_id(pos) != -1
+		var has_object = get_cell_source_id(pos) != -1
+		
+		if has_resource and has_object:
+			collision_count += 1
+			print("❌ COLISÃO DETECTADA em: ", pos)
+	
+	print("🎯 Resultado do teste:")
+	print("  - Amostras testadas: ", sample_size)
+	print("  - Colisões encontradas: ", collision_count)
+	
+	if collision_count == 0:
+		print("✅ Nenhuma colisão detectada - sistema funcionando!")
+	else:
+		print("⚠️ Colisões encontradas - verificar lógica de geração")
+	
+	print("=== FIM TESTE ===\n")
+
+# Sistema para manter posicionamento correto
+func _process(_delta):
+	if not Engine.is_editor_hint():
+		if position != Vector2(0, 0) or scale != Vector2(2.0, 2.0):
+			position = Vector2(0, 0)
+			scale = Vector2(2.0, 2.0)
