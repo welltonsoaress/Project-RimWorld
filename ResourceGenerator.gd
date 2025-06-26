@@ -18,7 +18,7 @@ extends TileMapLayer
 
 # === CONFIGURAÇÃO DE FORMAÇÕES ROCHOSAS ===
 @export_group("Formações Rochosas")
-@export_range(0.0, 0.3) var rock_formation_density: float = 0.12  # AUMENTADO
+@export_range(0.0, 0.3) var rock_formation_density: float = 0.12
 @export_range(5, 50) var min_formation_size: int = 8
 @export_range(15, 200) var max_formation_size: int = 45
 @export_range(0.1, 1.0) var formation_compactness: float = 0.7
@@ -28,17 +28,18 @@ extends TileMapLayer
 @export_range(0.0, 8.0) var mountain_formation_multiplier: float = 5.0
 @export_range(0.0, 4.0) var hills_formation_multiplier: float = 3.0
 @export_range(0.0, 2.0) var desert_formation_multiplier: float = 1.5
-@export_range(0.0, 2.0) var grassland_formation_multiplier: float = 1.0  # AUMENTADO
+@export_range(0.0, 2.0) var grassland_formation_multiplier: float = 1.0
 @export_range(0.0, 2.0) var forest_formation_multiplier: float = 0.8
 
 @export_group("Debug")
 @export var debug_generation: bool = false
-@export var force_generation_everywhere: bool = false  # Para debug
 
 # === SISTEMA DE RECURSOS ===
 var terrain_generator: TileMapLayer
 var formation_noise: FastNoiseLite
 var detail_noise: FastNoiseLite
+var map_width: int = 128
+var map_height: int = 128
 
 # Configuração dos tipos de rochas
 var rock_types = {
@@ -46,7 +47,7 @@ var rock_types = {
 		"atlas_coords": Vector2i(2, 0),
 		"name": "Stone",
 		"color": Color(0.6, 0.6, 0.6),
-		"preferred_biomes": ["mountain", "hills", "desert", "grassland", "forest"],  # EXPANDIDO
+		"preferred_biomes": ["mountain", "hills", "desert", "grassland", "forest"],
 		"formation_chance": 1.0,
 		"min_cluster_size": 8,
 		"max_cluster_size": 45
@@ -54,7 +55,7 @@ var rock_types = {
 }
 
 func _ready():
-	print("🏔️ EnhancedResourceGenerator iniciado")
+	print("🏔️ ResourceGenerator iniciado")
 	add_to_group("resources")
 	
 	setup_tileset()
@@ -82,8 +83,6 @@ func setup_noise_generators():
 	detail_noise.fractal_type = FastNoiseLite.FRACTAL_RIDGED
 	detail_noise.fractal_octaves = 2
 	detail_noise.seed = randi() + 1000
-	
-	print("🎲 Ruído configurado - Formation seed:", formation_noise.seed, "Detail seed:", detail_noise.seed)
 
 func setup_tileset():
 	"""Configura TileSet automaticamente"""
@@ -100,44 +99,36 @@ func setup_tileset():
 	
 	atlas_source.texture = load(texture_path)
 	atlas_source.texture_region_size = Vector2i(32, 32)
-	atlas_source.create_tile(Vector2i(2, 0))  # Pedra
+	atlas_source.create_tile(Vector2i(2, 0))
 	
 	new_tileset.add_source(atlas_source, 0)
 	tile_set = new_tileset
-	print("✅ EnhancedResourceGenerator: TileSet configurado")
+	print("✅ ResourceGenerator: TileSet configurado")
 
 func force_correct_positioning():
-	"""Força posicionamento correto igual ao TerrainMap"""
+	"""Força posicionamento correto"""
 	position = Vector2(0, 0)
 	scale = Vector2(2.0, 2.0)
 	visible = true
 	enabled = true
 	z_index = 1
-	print("✅ ResourceMap posicionado: scale=", scale, " z_index=", z_index)
 
 func find_terrain_generator():
 	"""Encontra o TerrainGenerator na cena"""
-	var possible_paths = [
-		"../../Terrain/TerrainMap",
-		"../Terrain/TerrainMap",
-		"/root/Main/Terrain/TerrainMap"
-	]
-	
-	for path in possible_paths:
-		var node = get_node_or_null(path)
-		if node and node is TileMapLayer:
-			terrain_generator = node
-			print("✅ TerrainGenerator encontrado em: ", path)
-			return
-	
 	var terrain_nodes = get_tree().get_nodes_in_group("terrain")
 	if terrain_nodes.size() > 0:
 		terrain_generator = terrain_nodes[0]
-		print("✅ TerrainGenerator encontrado via grupo: ", terrain_generator.get_path())
+		# CORREÇÃO: Obtém dimensões do mapa do terrain
+		if "map_width" in terrain_generator:
+			map_width = terrain_generator.map_width
+		if "map_height" in terrain_generator:
+			map_height = terrain_generator.map_height
+		print("✅ TerrainGenerator encontrado: ", terrain_generator.get_path())
+		print("📏 Dimensões do mapa: ", map_width, "x", map_height)
 
 func generate():
 	"""Gera formações rochosas - VERSÃO CORRIGIDA"""
-	print("🏔️ Gerando formações rochosas avançadas...")
+	print("🏔️ Gerando formações rochosas...")
 	clear()
 	
 	if not terrain_generator:
@@ -148,88 +139,43 @@ func generate():
 	
 	force_correct_positioning()
 	
-	var map_width = terrain_generator.get("map_width") if "map_width" in terrain_generator else 128
-	var map_height = terrain_generator.get("map_height") if "map_height" in terrain_generator else 128
-	
 	print("🗺️ Gerando formações em mapa ", map_width, "x", map_height)
-	
-	# DEBUG: Verifica se terrain tem dados
-	debug_terrain_data(map_width, map_height)
 	
 	# Gera formações de cada tipo de rocha
 	for rock_type_name in rock_types:
-		generate_rock_formations(rock_type_name, map_width, map_height)
+		generate_rock_formations(rock_type_name)
 	
 	print("✅ Formações rochosas geradas!")
 	call_deferred("final_positioning_check")
 
-func debug_terrain_data(map_width: int, map_height: int):
-	"""Debug dos dados do terreno"""
-	if not debug_generation:
-		return
-		
-	print("🔍 === DEBUG TERRAIN DATA ===")
-	var biome_count = {}
-	var sample_positions = []
-	
-	# Amostra alguns pontos
-	for i in range(10):
-		var x = randi_range(10, map_width - 10)
-		var y = randi_range(10, map_height - 10)
-		var pos = Vector2i(x, y)
-		var biome = get_biome_at_position(pos)
-		
-		sample_positions.append({"pos": pos, "biome": biome})
-		
-		if not biome in biome_count:
-			biome_count[biome] = 0
-		biome_count[biome] += 1
-	
-	print("📊 Biomas encontrados:", biome_count)
-	print("📍 Amostras:")
-	for sample in sample_positions:
-		print("  ", sample["pos"], " = ", sample["biome"])
-	print("=== FIM DEBUG ===")
-
-func generate_rock_formations(rock_type_name: String, map_width: int, map_height: int):
-	"""Gera formações de um tipo específico de rocha - VERSÃO CORRIGIDA"""
+func generate_rock_formations(rock_type_name: String):
+	"""Gera formações de um tipo específico de rocha"""
 	var rock_config = rock_types[rock_type_name]
 	var placed_rocks = {}
 	var formations_created = 0
 	var attempts_made = 0
-	var valid_anchors_found = 0
 	
 	print("🪨 Gerando formações de ", rock_type_name, "...")
 	
-	# CORREÇÃO: Muito mais tentativas e densidade aumentada
-	var base_attempts = int(map_width * map_height * rock_formation_density * 0.01)  # AUMENTADO
-	if debug_generation:
-		print("🎯 Tentativas planejadas: ", base_attempts)
+	var base_attempts = int(map_width * map_height * rock_formation_density * 0.01)
 	
 	# Busca pontos de ancoragem para formações
 	for attempt in range(base_attempts):
 		attempts_made += 1
 		
-		var anchor_x = randi_range(5, map_width - 5)  # Margens menores
-		var anchor_y = randi_range(5, map_height - 5)
+		# CORREÇÃO CRÍTICA: Garante que anchor está dentro dos limites
+		var anchor_x = randi_range(5, map_width - 6)  # Margem de segurança
+		var anchor_y = randi_range(5, map_height - 6)
 		var anchor_pos = Vector2i(anchor_x, anchor_y)
 		
-		# CORREÇÃO: Validação mais permissiva
-		if not is_valid_formation_anchor_corrected(anchor_pos, rock_type_name):
+		if not is_valid_formation_anchor(anchor_pos, rock_type_name):
 			continue
 		
-		valid_anchors_found += 1
-		
-		# Calcula tamanho da formação baseado no bioma
 		var biome = get_biome_at_position(anchor_pos)
 		var biome_multiplier = get_biome_multiplier(biome)
 		
-		if debug_generation and formations_created < 5:
-			print("🎯 Âncora válida em ", anchor_pos, " bioma=", biome, " mult=", biome_multiplier)
-		
-		# CORREÇÃO: Sempre gera algo, mesmo em biomas "inadequados"
 		if biome_multiplier < 0.1:
-			biome_multiplier = 0.3  # Mínimo garantido
+			biome_multiplier = 0.3
 		
 		var formation_size = calculate_formation_size(biome_multiplier, rock_config)
 		
@@ -243,132 +189,105 @@ func generate_rock_formations(rock_type_name: String, map_width: int, map_height
 		
 		if formation_rocks.size() > 0:
 			formations_created += 1
-			if debug_generation:
-				print("  🏔️ Formação ", formations_created, " criada com ", formation_rocks.size(), " rochas em ", anchor_pos)
 	
-	print("📊 ", rock_type_name, " - Tentativas:", attempts_made, " Âncoras válidas:", valid_anchors_found, " Formações:", formations_created)
+	print("📊 ", rock_type_name, " - Tentativas:", attempts_made, " Formações:", formations_created)
 
-func is_valid_formation_anchor_corrected(pos: Vector2i, rock_type_name: String) -> bool:
-	"""Verificação CORRIGIDA - NÃO gera em água"""
+func is_valid_formation_anchor(pos: Vector2i, rock_type_name: String) -> bool:
+	"""Verificação de âncora válida - COM LIMITE DE MAPA"""
 	if not terrain_generator:
 		return false
 	
-	# CORREÇÃO: Verifica se já tem recurso (deve estar vazio)
+	# CORREÇÃO PRINCIPAL: Verifica limites do mapa PRIMEIRO
+	if pos.x < 0 or pos.y < 0 or pos.x >= map_width or pos.y >= map_height:
+		return false
+	
+	# Verifica se já tem recurso
 	if get_cell_source_id(pos) != -1:
 		return false
 	
-	# CORREÇÃO: Verifica bioma - NUNCA gera em água
+	# Verifica bioma - nunca gera em água
 	var biome = get_biome_at_position(pos)
-	
-	# CORREÇÃO PRINCIPAL: Bloqueia água sempre, mesmo com force_generation_everywhere
 	if biome == "ocean":
 		return false
 	
-	# CORREÇÃO: Se force_generation_everywhere está ativo, permite outros biomas
-	if force_generation_everywhere:
-		return true
-	
-	# CORREÇÃO: Aceita todos os biomas terrestres (exceto água)
+	# Aceita todos os biomas terrestres
 	var terrestrial_biomes = ["mountain", "hills", "desert", "grassland", "forest", "beach"]
 	return biome in terrestrial_biomes
 
 func generate_single_formation(anchor_pos: Vector2i, target_size: int, rock_config: Dictionary, placed_rocks: Dictionary) -> Array:
-	"""Gera uma única formação rochosa orgânica - VERSÃO CORRIGIDA"""
+	"""Gera uma única formação rochosa"""
 	var formation_rocks = []
 	var pending_positions = [anchor_pos]
 	var formation_id = str(anchor_pos.x) + "_" + str(anchor_pos.y)
 	var iterations = 0
-	var max_iterations = target_size * 3  # Previne loops infinitos
+	var max_iterations = target_size * 3
 	
 	while pending_positions.size() > 0 and formation_rocks.size() < target_size and iterations < max_iterations:
 		iterations += 1
 		var current_pos = pending_positions.pop_front()
 		
-		# Verifica se já foi processada
 		if str(current_pos) in placed_rocks:
 			continue
 		
-		# CORREÇÃO: Validação mais simples
-		if not is_valid_rock_position_corrected(current_pos):
+		if not is_valid_rock_position(current_pos):
 			continue
 		
-		# CORREÇÃO: Lógica de probabilidade mais generosa
 		var noise_value = formation_noise.get_noise_2d(current_pos.x, current_pos.y)
 		var detail_value = detail_noise.get_noise_2d(current_pos.x, current_pos.y)
 		
-		# Calcula probabilidade baseada na distância do anchor
 		var distance_from_anchor = anchor_pos.distance_to(Vector2(current_pos.x, current_pos.y))
-		var size_factor = 1.0 - (distance_from_anchor / (target_size * 0.8))  # Mais generoso
+		var size_factor = 1.0 - (distance_from_anchor / (target_size * 0.8))
 		size_factor = clamp(size_factor, 0.0, 1.0)
 		
-		# CORREÇÃO: Probabilidade mais alta
 		var placement_chance = size_factor * formation_compactness
-		placement_chance += (noise_value + 1.0) * 0.4  # Mais influência do ruído
+		placement_chance += (noise_value + 1.0) * 0.4
 		placement_chance += (detail_value + 1.0) * 0.2
-		placement_chance = clamp(placement_chance, 0.0, 1.2)  # Permite > 1.0
+		placement_chance = clamp(placement_chance, 0.0, 1.2)
 		
 		if randf() < placement_chance:
-			# Coloca a rocha
 			set_cell(current_pos, 0, rock_config["atlas_coords"])
 			placed_rocks[str(current_pos)] = formation_id
 			formation_rocks.append(current_pos)
 			
-			# Adiciona posições vizinhas para expansão
-			add_expansion_candidates_corrected(current_pos, pending_positions, placed_rocks, formation_rocks.size(), target_size)
-	
-	if debug_generation and formation_rocks.size() > 0:
-		print("    ⛰️ Formação finalizada: ", formation_rocks.size(), " rochas (alvo: ", target_size, ")")
+			add_expansion_candidates(current_pos, pending_positions, placed_rocks, formation_rocks.size(), target_size)
 	
 	return formation_rocks
 
-func is_valid_rock_position_corrected(pos: Vector2i) -> bool:
-	"""Verificação CORRIGIDA - NÃO permite água"""
+func is_valid_rock_position(pos: Vector2i) -> bool:
+	"""Verificação de posição válida para rocha - COM LIMITE DE MAPA"""
 	if not terrain_generator:
 		return false
 	
-	# Verifica limites do mapa
-	var map_width = terrain_generator.get("map_width") if "map_width" in terrain_generator else 128
-	var map_height = terrain_generator.get("map_height") if "map_height" in terrain_generator else 128
-	
+	# CORREÇÃO CRÍTICA: Verifica limites do mapa
 	if pos.x < 0 or pos.y < 0 or pos.x >= map_width or pos.y >= map_height:
 		return false
 	
-	# CORREÇÃO: Verifica se já há recurso (não deve sobrescrever)
+	# Verifica se já há recurso
 	if get_cell_source_id(pos) != -1:
 		return false
 	
-	# CORREÇÃO: Verifica bioma - NUNCA permite água
+	# Verifica bioma - nunca permite água
 	var biome = get_biome_at_position(pos)
 	if biome == "ocean":
-		return false  # Bloqueia água sempre
+		return false
 	
-	# CORREÇÃO: Se force_generation_everywhere, permite outros biomas terrestres
-	if force_generation_everywhere:
-		return true
-	
-	# CORREÇÃO: Validação normal para biomas terrestres
 	return biome in ["mountain", "hills", "desert", "grassland", "forest", "beach"]
 
-func add_expansion_candidates_corrected(center_pos: Vector2i, pending_positions: Array, placed_rocks: Dictionary, current_size: int, target_size: int):
-	"""Adiciona candidatos para expansão - VERSÃO CORRIGIDA"""
-	# CORREÇÃO: Padrões de expansão mais agressivos
+func add_expansion_candidates(center_pos: Vector2i, pending_positions: Array, placed_rocks: Dictionary, current_size: int, target_size: int):
+	"""Adiciona candidatos para expansão"""
 	var expansion_patterns = [
-		# Adjacentes diretos (sempre)
 		[Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)],
-		# Diagonais
 		[Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)],
-		# Expansão mais distante
 		[Vector2i(2, 0), Vector2i(-2, 0), Vector2i(0, 2), Vector2i(0, -2)]
 	]
 	
-	# CORREÇÃO: Usa todos os padrões, não apenas um
 	var patterns_to_use = []
 	if current_size < target_size * 0.3:
-		patterns_to_use = [0]  # Só adjacentes
+		patterns_to_use = [0]
 	elif current_size < target_size * 0.7:
-		patterns_to_use = [0, 1]  # Adjacentes + diagonais
+		patterns_to_use = [0, 1]
 	else:
-		patterns_to_use = [0, 1, 2]  # Todos
+		patterns_to_use = [0, 1, 2]
 	
 	for pattern_index in patterns_to_use:
 		var chosen_pattern = expansion_patterns[pattern_index]
@@ -376,23 +295,23 @@ func add_expansion_candidates_corrected(center_pos: Vector2i, pending_positions:
 		for offset in chosen_pattern:
 			var new_pos = center_pos + offset
 			
+			# CORREÇÃO: Verifica limites antes de adicionar à lista
+			if new_pos.x < 0 or new_pos.y < 0 or new_pos.x >= map_width or new_pos.y >= map_height:
+				continue
+			
 			if str(new_pos) in placed_rocks or new_pos in pending_positions:
 				continue
 			
-			# CORREÇÃO: Probabilidade mais alta de adicionar
-			var add_chance = 1.0 - (edge_roughness * 0.5)  # Menos rugosidade
+			var add_chance = 1.0 - (edge_roughness * 0.5)
 			if randf() < add_chance:
 				pending_positions.append(new_pos)
 
 func calculate_formation_size(biome_multiplier: float, rock_config: Dictionary) -> int:
-	"""Calcula tamanho da formação baseado no bioma e configuração"""
+	"""Calcula tamanho da formação"""
 	var base_size = lerp(float(min_formation_size), float(max_formation_size), randf())
 	var adjusted_size = base_size * biome_multiplier
-	
-	# CORREÇÃO: Garante tamanho mínimo
 	adjusted_size = max(adjusted_size, float(min_formation_size))
 	
-	# Variação extra
 	var size_variation = randf_range(0.8, 1.2)
 	adjusted_size *= size_variation
 	
@@ -422,7 +341,7 @@ func get_biome_from_terrain_tile(terrain_tile: Vector2i) -> String:
 		_: return "grassland"
 
 func get_biome_multiplier(biome: String) -> float:
-	"""Retorna multiplicador de formação para um bioma - CORRIGIDO"""
+	"""Retorna multiplicador de formação para um bioma"""
 	match biome:
 		"mountain": return mountain_formation_multiplier
 		"hills": return hills_formation_multiplier
@@ -443,69 +362,7 @@ func final_positioning_check():
 		z_index = 1
 	
 	queue_redraw()
-	print("✅ ResourceMap: Posicionamento final verificado")
 
-# === FUNÇÕES DE DEBUG E ANÁLISE ===
-@export_group("Debug Avançado")
-@export var analyze_formations: bool = false:
-	set(value):
-		if value:
-			analyze_formations = false
-			analyze_generated_formations()
-
-@export var test_single_formation: bool = false:
-	set(value):
-		if value:
-			test_single_formation = false
-			test_formation_at_center()
-
-func analyze_generated_formations():
-	"""Analisa as formações geradas"""
-	print("\n📊 === ANÁLISE DAS FORMAÇÕES ROCHOSAS ===")
-	
-	var total_rocks = 0
-	var formations = {}
-	
-	var map_width = terrain_generator.get("map_width") if terrain_generator and "map_width" in terrain_generator else 128
-	var map_height = terrain_generator.get("map_height") if terrain_generator and "map_height" in terrain_generator else 128
-	
-	# Conta todas as rochas
-	for x in range(map_width):
-		for y in range(map_height):
-			var pos = Vector2i(x, y)
-			if get_cell_source_id(pos) != -1:
-				total_rocks += 1
-	
-	print("🪨 Total de rochas encontradas: ", total_rocks)
-	
-	if total_rocks == 0:
-		print("❌ NENHUMA ROCHA GERADA!")
-		print("🔍 Sugestões:")
-		print("  1. Ative 'debug_generation' para mais detalhes")
-		print("  2. Ative 'force_generation_everywhere' para teste")
-		print("  3. Aumente 'rock_formation_density'")
-	
-	print("=== FIM ANÁLISE ===\n")
-
-func test_formation_at_center():
-	"""Testa geração de uma formação no centro do mapa"""
-	print("\n🧪 === TESTE FORMAÇÃO NO CENTRO ===")
-	
-	var map_width = terrain_generator.get("map_width") if terrain_generator and "map_width" in terrain_generator else 128
-	var map_height = terrain_generator.get("map_height") if terrain_generator and "map_height" in terrain_generator else 128
-	
-	var center_pos = Vector2i(map_width / 2, map_height / 2)
-	var rock_config = rock_types["stone"]
-	var placed_rocks = {}
-	
-	print("🎯 Testando formação em: ", center_pos)
-	
-	var formation_rocks = generate_single_formation(center_pos, 20, rock_config, placed_rocks)
-	
-	print("✅ Formação teste criada com ", formation_rocks.size(), " rochas")
-	print("=== FIM TESTE ===\n")
-
-# Sistema para manter posicionamento correto
 func _process(_delta):
 	if not Engine.is_editor_hint():
 		if position != Vector2(0, 0) or scale != Vector2(2.0, 2.0):

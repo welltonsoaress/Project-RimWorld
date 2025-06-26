@@ -1,4 +1,4 @@
-# DebugHelper.gd - Versão simplificada e robusta
+# DebugHelper.gd - Versão corrigida e simplificada
 extends Node
 
 @export var debug_tiles: bool = false:
@@ -21,14 +21,12 @@ extends Node
 			call_deferred("force_all_visible")
 
 func _ready():
-	# Aguarda um frame para garantir que a cena esteja pronta
 	await get_tree().process_frame
 
 func debug_all_tiles():
 	"""Debug completo usando apenas sistema de grupos"""
 	print("\n🔍 === DEBUG COMPLETO DOS TILES ===")
 	
-	# CORREÇÃO: Só usa sistema de grupos - é mais confiável
 	var terrain_nodes = get_tree().get_nodes_in_group("terrain")
 	var resource_nodes = get_tree().get_nodes_in_group("resources")
 	var object_nodes = get_tree().get_nodes_in_group("objects")
@@ -67,7 +65,7 @@ func debug_all_tiles():
 		print("  - Visible: ", shader.visible)
 		print("  - Scale: ", shader.scale)
 		print("  - Position: ", shader.position)
-		print("  - Z-Index: ", shader.z_index)
+		print("  - Z-Index: ", shader.z_index if "z_index" in shader else "N/A")
 		print("  - Material: ", shader.material != null)
 		if shader.material and shader.material is ShaderMaterial:
 			var mat = shader.material as ShaderMaterial
@@ -81,13 +79,17 @@ func debug_all_tiles():
 
 func debug_tilemap_layer(tilemap: TileMapLayer, name: String):
 	"""Debug de um TileMapLayer específico"""
+	if not tilemap:
+		print("❌ ", name, " é null")
+		return
+		
 	print("\n📊 ", name, " DEBUG:")
 	print("  - Caminho: ", tilemap.get_path())
 	print("  - Visible: ", tilemap.visible)
 	print("  - Enabled: ", tilemap.enabled)
 	print("  - Scale: ", tilemap.scale)
 	print("  - Position: ", tilemap.position)
-	print("  - Z-Index: ", tilemap.z_index)
+	print(" - Z-Index: ", str(tilemap.z_index) if tilemap else "N/A")
 	print("  - TileSet: ", tilemap.tile_set != null)
 	
 	if tilemap.tile_set:
@@ -99,20 +101,25 @@ func debug_tilemap_layer(tilemap: TileMapLayer, name: String):
 			if source is TileSetAtlasSource:
 				var atlas = source as TileSetAtlasSource
 				print("  - Texture: ", atlas.texture != null)
-				print("  - Texture size: ", atlas.texture.get_size() if atlas.texture else "N/A")
-				print("  - Tile size: ", atlas.texture_region_size)
+				if atlas.texture:
+					print("  - Texture size: ", atlas.texture.get_size())
+					print("  - Tile size: ", atlas.texture_region_size)
 	
-	# Conta tiles não vazios - amostragem menor para performance
+	# Conta tiles de forma segura
 	var tile_count = 0
 	var sample_positions = []
 	
-	for x in range(0, 128, 32):  # Amostragem maior (menos pontos)
-		for y in range(0, 128, 32):
+	# Amostragem limitada para evitar problemas
+	var max_samples = 5
+	var step = 32
+	
+	for x in range(0, min(128, step * 4), step):
+		for y in range(0, min(128, step * 4), step):
 			var pos = Vector2i(x, y)
 			var source_id = tilemap.get_cell_source_id(pos)
 			if source_id != -1:
 				tile_count += 1
-				if sample_positions.size() < 3:  # Apenas 3 exemplos
+				if sample_positions.size() < max_samples:
 					var atlas_coords = tilemap.get_cell_atlas_coords(pos)
 					sample_positions.append({"pos": pos, "atlas": atlas_coords})
 	
@@ -176,7 +183,8 @@ func force_all_visible():
 	
 	if terrain:
 		terrain.visible = true
-		terrain.z_index = 0
+		if "z_index" in terrain:
+			terrain.z_index = 0
 		terrain.scale = Vector2(2, 2)
 		print("✅ TerrainMap forçado a visible com escala (2,2)")
 	else:
@@ -184,7 +192,8 @@ func force_all_visible():
 	
 	if resources:
 		resources.visible = true
-		resources.z_index = 1
+		if "z_index" in resources:
+			resources.z_index = 1
 		resources.scale = Vector2(2, 2)
 		print("✅ ResourceMap forçado a visible com escala (2,2)")
 	else:
@@ -192,7 +201,8 @@ func force_all_visible():
 	
 	if objects:
 		objects.visible = true
-		objects.z_index = 2
+		if "z_index" in objects:
+			objects.z_index = 2
 		objects.scale = Vector2(2, 2)
 		print("✅ ObjectMap forçado a visible com escala (2,2)")
 	else:
