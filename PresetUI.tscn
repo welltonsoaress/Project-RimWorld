@@ -1,0 +1,195 @@
+[gd_scene load_steps=3 format=3 uid="uid://dwqdqbnj467j3"]
+
+[ext_resource type="Script" uid="uid://brmmkdyt4wvtp" path="res://WorldPresetController.gd" id="1_gh0e5"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gh0e5"]
+bg_color = Color(0.1, 0.1, 0.1, 0.9)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.3, 0.3, 0.3, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="WorldPresetController" type="Control" groups=["Preset_UI"]]
+clip_contents = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_gh0e5")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.3)
+
+[node name="MainPanel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -1572.0
+offset_top = 20.0
+offset_right = -1172.0
+offset_bottom = 680.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_gh0e5")
+
+[node name="ScrollContainer" type="ScrollContainer" parent="MainPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainPanel/ScrollContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="Title" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "🌍 Gerador de Mundos Procedurais"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PresetSection" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="PresetLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/PresetSection"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "🎯 Estilo de Jogo"
+
+[node name="PresetDropdown" type="OptionButton" parent="MainPanel/ScrollContainer/VBoxContainer/PresetSection"]
+layout_mode = 2
+tooltip_text = "Selecione um estilo..."
+theme_override_font_sizes/font_size = 14
+
+[node name="PresetDescription" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/PresetSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+text = "Escolha um estilo para configurar automaticamente o mundo"
+autowrap_mode = 3
+
+[node name="HSeparator1" type="HSeparator" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="BasicSettings" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="SettingsLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
+layout_mode = 2
+
+[node name="SizeContainer" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
+layout_mode = 2
+
+[node name="SizeLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SizeContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Tamanho do Mapa:"
+
+[node name="SizeDropdown" type="OptionButton" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SizeContainer"]
+layout_mode = 2
+
+[node name="TerrainContainer" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
+layout_mode = 2
+
+[node name="TerrainLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/TerrainContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Tipo de Terreno:"
+
+[node name="TerrainDropdown" type="OptionButton" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/TerrainContainer"]
+layout_mode = 2
+
+[node name="SeedContainer" type="HBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SeedLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SeedContainer"]
+custom_minimum_size = Vector2(80, 0)
+layout_mode = 2
+text = "Seed:"
+
+[node name="SeedInput" type="SpinBox" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SeedContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 1e+09
+
+[node name="RandomSeedButton" type="Button" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SeedContainer"]
+custom_minimum_size = Vector2(40, 0)
+layout_mode = 2
+tooltip_text = "Gerar seed aleatório"
+text = "🎲"
+
+[node name="HSeparator2" type="HSeparator" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="GenerationControls" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ControlsLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls"]
+layout_mode = 2
+
+[node name="GenerateButton" type="Button" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls"]
+custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "🌍 Gerar Mundo Completo"
+
+[node name="ActionsContainer" type="HBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="RegenerateObjectsBtn" type="Button" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls/ActionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Regenera apenas vegetação"
+text = "🌿 Só Objetos"
+
+[node name="TestQualityBtn" type="Button" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls/ActionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Verifica conflitos e qualidade"
+text = "🔍 Testar"
+
+[node name="ClearAllBtn" type="Button" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls/ActionsContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Remove todos os elementos"
+text = "🧹 Limpar"
+
+[node name="StatusLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 1, 0, 1)
+text = "✅ Pronto para gerar"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HSeparator3" type="HSeparator" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ValuesSection" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="ValuesLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/ValuesSection"]
+layout_mode = 2
+
+[node name="ValuesDisplay" type="RichTextLabel" parent="MainPanel/ScrollContainer/VBoxContainer/ValuesSection"]
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+bbcode_enabled = true
+text = "[color=yellow]Carregando valores...[/color]"
+fit_content = true

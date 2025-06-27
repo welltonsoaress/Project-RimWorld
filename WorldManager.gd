@@ -69,7 +69,32 @@ func _ready():
 	if not Engine.is_editor_hint():
 		await get_tree().process_frame
 		generate_complete_world()
+		setup_groups()
+		create_preset_interface()
 
+func setup_groups():
+	"""Configura grupos para os componentes"""
+	add_to_group("world_manager")  # Este nó principal
+	
+	# Encontra e adiciona componentes aos grupos
+	var terrain = get_node_or_null("TerrainGenerator")
+	if terrain:
+		terrain.add_to_group("terrain")
+	
+	var resources = get_node_or_null("ResourceGenerator")
+	if resources:
+		resources.add_to_group("resources")
+	
+	var objects = get_node_or_null("ObjectGenerator")
+	if objects:
+		objects.add_to_group("objects")
+		
+func create_preset_interface():
+	"""Cria a interface de presets"""
+	var preset_controller = preload("res://WorldPresetController.gd").new()
+	add_child(preset_controller)
+	print("✅ Interface de presets carregada!")
+	
 # === BUSCA DE COMPONENTES ===
 func find_all_components() -> bool:
 	"""Encontra todos os componentes necessários"""
