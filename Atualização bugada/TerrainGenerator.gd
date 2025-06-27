@@ -9,8 +9,13 @@ extends TileMapLayer
 @export var terrain_seed: int = 0
 
 @export_group("Tipo de Terreno")
-@export_enum("Continente", "Ilha", "Arquipélago", "Península") 
-var terrain_type: String = "Continente"
+@export_enum("Auto", "Ilha", "Continente", "Arquipélago", "Península", "Desertão")
+var terrain_type: String = "Auto"
+
+@export_group("Qualidade do Terreno")
+@export_range(1, 8) var noise_octaves: int = 4
+@export_range(0.001, 0.1) var noise_frequency: float = 0.03
+@export_range(0.0, 2.0) var terrain_smoothness: float = 1.0
 
 @export_group("Controles")
 @export var generate_terrain: bool = false:
@@ -25,30 +30,17 @@ var terrain_type: String = "Continente"
 			clear_terrain = false
 			clear()
 
-# === CONFIGURAÇÕES PROFISSIONAIS TIPO RIMWORLD ===
-@export_group("Parâmetros Realistas")
-@export_range(0.0, 1.0) var ocean_coverage: float = 0.15
-@export_range(0.0, 1.0) var mountain_coverage: float = 0.12
-@export_range(0.0, 1.0) var forest_density: float = 0.25
-@export_range(0.0, 1.0) var desert_chance: float = 0.08
-
-@export_group("Qualidade do Terreno")
-@export_range(1, 8) var noise_octaves: int = 4
-@export_range(0.001, 0.1) var noise_frequency: float = 0.02
-@export_range(0.0, 2.0) var terrain_smoothness: float = 1.0
-
-# === THRESHOLDS CALCULADOS DINAMICAMENTE ===
-var ocean_threshold: float
-var beach_threshold: float
-var grassland_threshold: float
-var forest_threshold: float
-var hills_threshold: float
-var mountain_threshold: float
+# === THRESHOLDS ORIGINAIS (COMO NO CÓDIGO FUNCIONAL) ===
+@export var oceanThreshold := 0.25
+@export var beachThreshold := 0.35
+@export var desertThreshold := 0.45
+@export var grassThreshold := 0.55
+@export var darkGrassThreshold := 0.7
+@export var mountainThreshold := 0.85
 
 # === SISTEMA DE RUÍDO ===
-var height_noise: FastNoiseLite
-var temperature_noise: FastNoiseLite
-var humidity_noise: FastNoiseLite
+var noise: FastNoiseLite = null
+var isIsland: bool = false
 
 func _ready():
 	print("🌍 TerrainGenerator iniciado")
@@ -57,13 +49,12 @@ func _ready():
 	add_to_group("terrain")
 	
 	setup_tileset()
-	calculate_dynamic_thresholds()
 	
 	# CORREÇÃO: Força configurações visuais
 	visible = true
 	enabled = true
 	z_index = 0
-	scale = Vector2(1.0, 1.0)
+	scale = Vector2(2.0, 2.0)  # CORREÇÃO: Força escala 2.0
 	position = Vector2(0, 0)
 	
 	print("✅ TerrainMap configurado: visible=", visible, " scale=", scale, " z_index=", z_index)
@@ -108,298 +99,170 @@ func setup_tileset():
 	
 	print("✅ TileSet configurado automaticamente")
 
-func calculate_dynamic_thresholds():
-	"""Calcula thresholds dinâmicos baseados nos parâmetros"""
-	ocean_threshold = ocean_coverage
-	beach_threshold = ocean_threshold + 0.05
-	
-	# CORREÇÃO: Garante que todos os thresholds estejam entre 0-1
-	var remaining_land = 1.0 - beach_threshold
-	
-	# Distribui o terreno restante proporcionalmente
-	grassland_threshold = beach_threshold + (remaining_land * 0.35)
-	forest_threshold = grassland_threshold + (remaining_land * forest_density * 0.6)
-	hills_threshold = forest_threshold + (remaining_land * 0.15)
-	mountain_threshold = min(0.95, hills_threshold + (remaining_land * mountain_coverage * 0.5))
-	
-	print("🎯 Thresholds calculados:")
-	print("  Ocean: ", "%.3f" % ocean_threshold)
-	print("  Beach: ", "%.3f" % beach_threshold)
-	print("  Grass: ", "%.3f" % grassland_threshold)
-	print("  Forest: ", "%.3f" % forest_threshold)
-	print("  Hills: ", "%.3f" % hills_threshold)
-	print("  Mountain: ", "%.3f" % mountain_threshold)
-
-func setup_noise():
-	"""Configura geradores de ruído profissionais"""
-	var seed_value = terrain_seed if terrain_seed != 0 else randi()
-	
-	# Ruído de altura principal
-	height_noise = FastNoiseLite.new()
-	height_noise.seed = seed_value
-	height_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	height_noise.frequency = noise_frequency
-	height_noise.fractal_type = FastNoiseLite.FRACTAL_FBM
-	height_noise.fractal_octaves = noise_octaves
-	height_noise.fractal_lacunarity = 2.0
-	height_noise.fractal_gain = 0.5
-	
-	# Ruído de temperatura (varia com latitude)
-	temperature_noise = FastNoiseLite.new()
-	temperature_noise.seed = seed_value + 1000
-	temperature_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	temperature_noise.frequency = noise_frequency * 0.7
-	temperature_noise.fractal_octaves = 3
-	
-	# Ruído de umidade
-	humidity_noise = FastNoiseLite.new()
-	humidity_noise.seed = seed_value + 2000
-	humidity_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
-	humidity_noise.frequency = noise_frequency * 0.8
-	humidity_noise.fractal_octaves = 3
-	
-	print("🌀 Geradores de ruído configurados com seed: ", seed_value)
-
 func GenerateTerrain():
-	"""Função principal de geração - CORRIGIDA E PROFISSIONAL"""
-	print("🚀 Gerando terreno profissional tipo RimWorld...")
+	"""CORREÇÃO CRÍTICA: Baseado no código funcional original"""
+	print("🌍 Gerando terreno procedural...")
+	
+	# Verifica se tile_set existe
+	if not tile_set:
+		print("⚠️ TileSet não configurado, criando...")
+		setup_tileset()
+		if not tile_set:
+			print("❌ Falha ao criar TileSet!")
+			return
+	
+	var rng = RandomNumberGenerator.new()
+	
+	# CORREÇÃO CRÍTICA: Reset da seed igual ao código funcional
+	terrain_seed = 0  # FORÇA RESET para aleatoriedade a cada geração
+	
+	if terrain_seed == 0:
+		rng.randomize()
+		terrain_seed = rng.randi()
+		print("🌱 Nova semente gerada: ", terrain_seed)
+	else:
+		rng.set_seed(terrain_seed)
+		print("🌱 Usando semente fixa: ", terrain_seed)
+	
+	# CORREÇÃO: Determina tipo de terreno igual ao original
+	match terrain_type:
+		"Ilha":
+			isIsland = true
+		"Continente":
+			isIsland = false
+		"Auto":
+			isIsland = rng.randf() < 0.5
+		"Arquipélago":
+			isIsland = true
+		"Península":
+			isIsland = false
+		"Desertão":
+			isIsland = false
+	print("🔀 Terreno: " + ("Ilha" if isIsland else "Continente"))
+	
+	# CORREÇÃO: Configuração de ruído com parâmetros exportados
+	noise = FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = noise_frequency  # Usa propriedade exportada
+	noise.seed = terrain_seed
+	noise.fractal_type = FastNoiseLite.FRACTAL_FBM
+	noise.fractal_octaves = noise_octaves  # Usa propriedade exportada
+	print("📊 Ruído configurado com semente: ", noise.seed)
 	
 	clear()
-	setup_noise()
-	calculate_dynamic_thresholds()
 	
-	var terrain_data = generate_height_map()
-	apply_terrain_type_modifications(terrain_data)
-	place_terrain_tiles(terrain_data)
-	save_map_data(terrain_data)
+	# CORREÇÃO CRÍTICA: Remove mapData.png antigo ANTES de gerar
+	force_remove_old_mapdata()
+	await get_tree().process_frame
+	
+	var image = Image.create(map_width, map_height, true, Image.FORMAT_RGB8)
+	
+	for x in range(map_width):
+		for y in range(map_height):
+			var height = noise.get_noise_2d(x, y)
+			height = (height + 1.0) / 2.0
+			
+			# CORREÇÃO: Aplicação de falloff de ilha igual ao original
+			if isIsland:
+				var dx = float(x - map_width / 2.0) / (map_width / 2.0)
+				var dy = float(y - map_height / 2.0) / (map_height / 2.0)
+				var dist = sqrt(dx * dx + dy * dy)
+				height *= clamp(1.0 - dist, 0.0, 1.0)
+			
+			# CORREÇÃO: Mapeamento direto igual ao código original
+			var atlas_coord = Vector2i(0, 1)  # Água por padrão
+			var tile_id = 4  # Água (índice 4 no atlas)
+			
+			if height < oceanThreshold:
+				atlas_coord = Vector2i(0, 1)  # Água
+				tile_id = 4
+			elif height < beachThreshold:
+				atlas_coord = Vector2i(1, 1)  # Areia de praia
+				tile_id = 5
+			elif height < desertThreshold:
+				atlas_coord = Vector2i(2, 1)  # Areia do deserto
+				tile_id = 6
+			elif height < grassThreshold:
+				atlas_coord = Vector2i(0, 0)  # Grama
+				tile_id = 0
+			elif height < darkGrassThreshold:
+				atlas_coord = Vector2i(1, 0)  # Grama escura
+				tile_id = 1
+			elif height < mountainThreshold:
+				atlas_coord = Vector2i(2, 0)  # Terra
+				tile_id = 2
+			else:
+				atlas_coord = Vector2i(3, 0)  # Pedra
+				tile_id = 3
+			
+			set_cell(Vector2i(x, y), 0, atlas_coord)
+			image.set_pixel(x, y, Color(float(tile_id) / 7.0, 0, 0))
+	
+	# CORREÇÃO: Garante posição igual ao original
+	position = Vector2(0, 0)
+	print("🔄 TerrainMap posicionado em: ", position)
+	
+	visible = true  # Garante que o TileMapLayer seja visível
+	
+	# CORREÇÃO CRÍTICA: Salva mapData.png igual ao original
+	save_map_data_original_method(image)
+	
+	# CORREÇÃO: Força escala 2.0 após geração
+	scale = Vector2(2.0, 2.0)
 	
 	print("✅ Terreno gerado com sucesso!")
 
-func generate_height_map() -> Array:
-	"""Gera mapa de altura base"""
-	var terrain_data = []
-	
-	for x in range(map_width):
-		terrain_data.append([])
-		for y in range(map_height):
-			# Altura base do ruído
-			var height = height_noise.get_noise_2d(x, y)
-			height = (height + 1.0) / 2.0  # Normaliza 0-1
-			
-			# Temperatura baseada na latitude
-			var latitude_factor = abs(float(y) / float(map_height) - 0.5) * 2.0
-			var temp_noise = temperature_noise.get_noise_2d(x, y)
-			var temperature = ((temp_noise + 1.0) / 2.0) * (1.0 - latitude_factor * 0.6)
-			
-			# Umidade
-			var humidity = (humidity_noise.get_noise_2d(x, y) + 1.0) / 2.0
-			
-			# Aplica suavização se configurada
-			if terrain_smoothness > 0:
-				height = apply_smoothing(height, x, y)
-			
-			terrain_data[x].append({
-				"height": height,
-				"temperature": temperature,
-				"humidity": humidity,
-				"biome": ""
-			})
-	
-	return terrain_data
+func force_remove_old_mapdata():
+	"""Remove mapData.png antigo para forçar atualização"""
+	var dir = DirAccess.open("res://")
+	if dir and dir.file_exists("mapData.png"):
+		var success = dir.remove("mapData.png")
+		if success == OK:
+			print("🗑️ mapData.png antigo removido")
+		else:
+			print("⚠️ Falha ao remover mapData.png antigo")
 
-func apply_smoothing(height: float, x: int, y: int) -> float:
-	"""Aplica suavização ao terreno"""
-	var smooth_factor = terrain_smoothness * 0.1
-	var neighbors = 0
-	var total_height = height
+func save_map_data_original_method(image: Image):
+	"""CORREÇÃO CRÍTICA: Salva mapData.png usando método original"""
+	# Remove arquivo antigo primeiro (igual ao código original)
+	var dir = DirAccess.open("res://")
+	if dir and dir.file_exists("res://mapData.png"):
+		dir.remove("res://mapData.png")
+		print("🗑️ mapData.png removido antes de salvar novo")
 	
-	# Verifica vizinhos para suavização
-	for dx in range(-1, 2):
-		for dy in range(-1, 2):
-			var nx = x + dx
-			var ny = y + dy
-			if nx >= 0 and nx < map_width and ny >= 0 and ny < map_height and (dx != 0 or dy != 0):
-				var neighbor_height = height_noise.get_noise_2d(nx, ny)
-				neighbor_height = (neighbor_height + 1.0) / 2.0
-				total_height += neighbor_height * smooth_factor
-				neighbors += 1
-	
-	return total_height / (1.0 + neighbors * smooth_factor)
-
-func apply_terrain_type_modifications(terrain_data: Array):
-	"""Aplica modificações baseadas no tipo de terreno"""
-	match terrain_type:
-		"Ilha":
-			apply_island_falloff(terrain_data)
-		"Arquipélago":
-			apply_archipelago_pattern(terrain_data)
-		"Península":
-			apply_peninsula_pattern(terrain_data)
-		"Continente":
-			apply_continental_pattern(terrain_data)
-
-func apply_island_falloff(terrain_data: Array):
-	"""Aplica falloff circular para criar ilha"""
-	var center_x = map_width / 2.0
-	var center_y = map_height / 2.0
-	var max_distance = min(center_x, center_y) * 0.8
-	
-	for x in range(map_width):
-		for y in range(map_height):
-			var dx = x - center_x
-			var dy = y - center_y
-			var distance = sqrt(dx * dx + dy * dy)
-			
-			var falloff = 1.0 - clamp(distance / max_distance, 0.0, 1.0)
-			falloff = pow(falloff, 1.5)  # Curva mais suave
-			
-			terrain_data[x][y]["height"] *= falloff
-
-func apply_archipelago_pattern(terrain_data: Array):
-	"""Cria padrão de arquipélago com múltiplas ilhas"""
-	var island_centers = [
-		Vector2(map_width * 0.3, map_height * 0.3),
-		Vector2(map_width * 0.7, map_height * 0.3),
-		Vector2(map_width * 0.5, map_height * 0.7),
-		Vector2(map_width * 0.2, map_height * 0.8),
-		Vector2(map_width * 0.8, map_height * 0.8)
-	]
-	
-	for x in range(map_width):
-		for y in range(map_height):
-			var max_influence = 0.0
-			
-			for center in island_centers:
-				var dx = x - center.x
-				var dy = y - center.y
-				var distance = sqrt(dx * dx + dy * dy)
-				var influence = 1.0 - clamp(distance / (min(map_width, map_height) * 0.2), 0.0, 1.0)
-				max_influence = max(max_influence, influence)
-			
-			terrain_data[x][y]["height"] *= max_influence
-
-func apply_peninsula_pattern(terrain_data: Array):
-	"""Cria padrão de península"""
-	for x in range(map_width):
-		for y in range(map_height):
-			var edge_distance = min(x, map_width - x, y, map_height - y)
-			var falloff = clamp(float(edge_distance) / (min(map_width, map_height) * 0.15), 0.0, 1.0)
-			
-			# Conecta uma das bordas (simula conexão com continente)
-			if y > map_height * 0.8:
-				falloff = 1.0
-			
-			terrain_data[x][y]["height"] *= falloff
-
-func apply_continental_pattern(terrain_data: Array):
-	"""Aplica padrão continental com bordas oceânicas"""
-	for x in range(map_width):
-		for y in range(map_height):
-			var edge_distance = min(x, map_width - x, y, map_height - y)
-			var falloff = clamp(float(edge_distance) / (min(map_width, map_height) * 0.1), 0.0, 1.0)
-			falloff = pow(falloff, 0.5)  # Falloff suave
-			
-			terrain_data[x][y]["height"] = terrain_data[x][y]["height"] * 0.7 + falloff * 0.3
-
-func place_terrain_tiles(terrain_data: Array):
-	"""Coloca tiles de terreno baseado nos dados gerados"""
-	var biome_counts = {}
-	
-	for x in range(map_width):
-		for y in range(map_height):
-			var data = terrain_data[x][y]
-			var height = data["height"]
-			var temperature = data["temperature"]
-			var humidity = data["humidity"]
-			
-			var biome = determine_biome(height, temperature, humidity)
-			var tile_coords = get_tile_coords_for_biome(biome)
-			
-			set_cell(Vector2i(x, y), 0, tile_coords)
-			terrain_data[x][y]["biome"] = biome
-			
-			# Conta biomas para estatísticas
-			if biome in biome_counts:
-				biome_counts[biome] += 1
-			else:
-				biome_counts[biome] = 1
-	
-	print_biome_statistics(biome_counts)
-
-func determine_biome(height: float, temperature: float, humidity: float) -> String:
-	"""Determina bioma baseado em altura, temperatura e umidade - SISTEMA REALISTA"""
-	
-	# Primeiro, verifica água
-	if height < ocean_threshold:
-		return "ocean"
-	
-	# Praia próxima à água
-	if height < beach_threshold:
-		return "beach"
-	
-	# CORREÇÃO: Para terreno alto, sempre considera montanhas primeiro
-	if height > mountain_threshold:
-		return "mountain"
-	
-	if height > hills_threshold:
-		# Deserto em colinas quentes e secas
-		if temperature > 0.7 and humidity < 0.3:
-			return "desert"
-		return "hills"
-	
-	# CORREÇÃO: Terreno médio - usa temperatura e umidade
-	if height > forest_threshold:
-		# Florestas em áreas úmidas
-		if humidity > 0.5 and temperature > 0.2 and temperature < 0.8:
-			return "forest"
-		# Deserto em áreas secas e quentes
-		elif temperature > 0.8 and humidity < 0.2:
-			return "desert"
-		return "grassland"
-	
-	# Terreno baixo
-	if temperature > 0.8 and humidity < 0.2:
-		return "desert"
-	
-	if humidity > 0.6 and temperature > 0.3 and temperature < 0.8:
-		return "forest"
-	
-	return "grassland"
-
-func get_tile_coords_for_biome(biome: String) -> Vector2i:
-	"""Retorna coordenadas do tile para cada bioma"""
-	match biome:
-		"ocean": return Vector2i(0, 1)
-		"beach": return Vector2i(1, 1)
-		"desert": return Vector2i(2, 1)
-		"grassland": return Vector2i(0, 0)
-		"forest": return Vector2i(1, 0)
-		"hills": return Vector2i(2, 0)
-		"mountain": return Vector2i(3, 0)
-		_: return Vector2i(0, 0)
-
-func save_map_data(terrain_data: Array):
-	"""Salva dados do mapa para o shader"""
-	var image = Image.create(map_width, map_height, false, Image.FORMAT_RGB8)
-	
-	for x in range(map_width):
-		for y in range(map_height):
-			var biome = terrain_data[x][y]["biome"]
-			var tile_id = get_tile_id_for_biome(biome)
-			var color = Color(float(tile_id) / 7.0, 0, 0)
-			image.set_pixel(x, y, color)
-	
+	# Salva nova imagem
 	var error = image.save_png("res://mapData.png")
 	if error == OK:
-		print("✅ mapData.png salvo com sucesso")
+		print("🗺️ mapData.png salvo com sucesso! - Primeiros pixels: ", image.get_pixel(0, 0), ", ", image.get_pixel(1, 0))
 		
-		# CORREÇÃO: Notifica outros sistemas que o terreno foi atualizado
-		notify_terrain_updated()
+		# CORREÇÃO CRÍTICA: Força reload da imagem importada
+		force_reimport_mapdata()
+		
+		# CORREÇÃO: Notifica outros sistemas
+		call_deferred("notify_terrain_updated")
 	else:
-		print("❌ Erro ao salvar mapData.png: ", error)
+		print("❌ Falha ao salvar mapData.png, erro: ", error)
+
+func force_reimport_mapdata():
+	"""CORREÇÃO: Força reimportação do mapData.png no sistema de assets"""
+	# No Godot 4, força refresh do filesystem
+	if Engine.is_editor_hint():
+		# Se estiver no editor, força refresh
+		var filesystem = EditorInterface.get_resource_filesystem()
+		if filesystem:
+			filesystem.scan()
+			filesystem.reimport_files(["res://mapData.png"])
+	else:
+		# Em runtime, força clear do cache
+		ResourceLoader.set_abort_on_missing_resources(false)
+		if ResourceLoader.has_cached("res://mapData.png"):
+			print("🔄 Limpando cache do mapData.png")
 
 func notify_terrain_updated():
 	"""Notifica outros sistemas que o terreno foi atualizado"""
+	# Aguarda um pouco mais para garantir que o arquivo foi escrito
+	await get_tree().create_timer(0.8).timeout  # AUMENTADO
+	
 	# Notifica shader para recarregar
 	var shader_controller = get_node_or_null("../../ShaderTerrain")
 	if not shader_controller:
@@ -409,34 +272,12 @@ func notify_terrain_updated():
 		print("🎯 Notificando shader para atualizar...")
 		shader_controller.call_deferred("update_texture")
 	
-	# Notifica outros geradores que o terreno mudou
-	var resource_generator = get_node_or_null("../../Resource/ResourceMap")
-	if resource_generator and resource_generator.has_method("find_terrain_generator"):
-		resource_generator.terrain_generator = null  # Força re-busca
-		resource_generator.call_deferred("find_terrain_generator")
-
-func get_tile_id_for_biome(biome: String) -> int:
-	"""Retorna ID numérico do tile para cada bioma"""
-	match biome:
-		"grassland": return 0
-		"forest": return 1
-		"hills": return 2
-		"mountain": return 3
-		"ocean": return 4
-		"beach": return 5
-		"desert": return 6
-		_: return 0
-
-func print_biome_statistics(biome_counts: Dictionary):
-	"""Imprime estatísticas dos biomas gerados"""
-	var total_tiles = map_width * map_height
-	
-	print("\n📊 === ESTATÍSTICAS DO TERRENO ===")
-	for biome in biome_counts:
-		var count = biome_counts[biome]
-		var percentage = float(count) / float(total_tiles) * 100.0
-		print("🔹 ", biome.capitalize(), ": ", "%.1f" % percentage, "% (", count, " tiles)")
-	print("=== TOTAL: ", total_tiles, " tiles ===\n")
+	# Atualiza label se existir (igual ao original)
+	var label = get_tree().root.get_node_or_null("Node2D/CanvasLayer/MapTypeLabel")
+	if not label:
+		label = get_tree().root.get_node_or_null("Main/UI/MapTypeLabel")
+	if label:
+		label.text = "Tipo: " + terrain_type + " → " + ("Ilha" if isIsland else "Continente")
 
 # === FUNÇÃO PARA OBTER BIOMA EM POSIÇÃO ESPECÍFICA ===
 func get_biome_at_position(x: int, y: int) -> String:
@@ -457,3 +298,13 @@ func get_biome_for_tile_coords(coords: Vector2i) -> String:
 	if coords == Vector2i(2, 0): return "hills"
 	if coords == Vector2i(3, 0): return "mountain"
 	return "grassland"
+
+# === MÉTODOS DE COMPATIBILIDADE ===
+func force_generate_terrain():
+	GenerateTerrain()
+
+func generate():
+	GenerateTerrain()
+
+func regenerate():
+	GenerateTerrain()

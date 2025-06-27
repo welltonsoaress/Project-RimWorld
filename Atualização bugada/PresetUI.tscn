@@ -1,0 +1,36 @@
+[gd_scene load_steps=2 format=3 uid="uid://dwqdqbnj467j3"]
+
+[ext_resource type="Script" uid="uid://c1y5g7rrx3b4f" path="res://ManualSimpleInterface.gd" id="1_gh0e5"]
+
+[node name="PresetUI" type="Control" node_paths=PackedStringArray("main_panel", "preset_dropdown", "generate_button", "status_label")]
+clip_contents = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_gh0e5")
+main_panel = NodePath("MainPanel")
+preset_dropdown = NodePath("MainPanel/VBox/PresetDropdown")
+generate_button = NodePath("MainPanel/VBox/GenerateButton")
+status_label = NodePath("MainPanel/VBox/StatusLabel")
+
+[node name="MainPanel" type="Panel" parent="."]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="VBox" type="VBoxContainer" parent="MainPanel"]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="PresetDropdown" type="OptionButton" parent="MainPanel/VBox"]
+layout_mode = 2
+
+[node name="GenerateButton" type="Button" parent="MainPanel/VBox"]
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="MainPanel/VBox"]
+layout_mode = 2
