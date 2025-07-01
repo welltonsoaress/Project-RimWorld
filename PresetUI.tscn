@@ -20,6 +20,10 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = 3.0
+offset_right = 3.0
+offset_bottom = 3.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_gh0e5")
@@ -38,9 +42,9 @@ layout_mode = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -1572.0
+offset_left = -1139.0
 offset_top = 20.0
-offset_right = -1172.0
+offset_right = -739.0
 offset_bottom = 680.0
 grow_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_gh0e5")
@@ -76,6 +80,16 @@ text = "🎯 Estilo de Jogo"
 layout_mode = 2
 tooltip_text = "Selecione um estilo..."
 theme_override_font_sizes/font_size = 14
+selected = 0
+item_count = 4
+popup/item_0/text = "Selecione..."
+popup/item_0/id = 0
+popup/item_1/text = "🏰 Balanced Empire"
+popup/item_1/id = 1
+popup/item_2/text = "🗡️ Harsh Survival"
+popup/item_2/id = 2
+popup/item_3/text = "🌿 Peaceful Explorer"
+popup/item_3/id = 3
 
 [node name="PresetDescription" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/PresetSection"]
 layout_mode = 2
@@ -102,6 +116,16 @@ text = "Tamanho do Mapa:"
 
 [node name="SizeDropdown" type="OptionButton" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/SizeContainer"]
 layout_mode = 2
+selected = 0
+item_count = 4
+popup/item_0/text = "Selecione..."
+popup/item_0/id = 0
+popup/item_1/text = "Pequeno (64x64)"
+popup/item_1/id = 1
+popup/item_2/text = "Médio (128x128)"
+popup/item_2/id = 2
+popup/item_3/text = "Grande (256x256)"
+popup/item_3/id = 3
 
 [node name="TerrainContainer" type="VBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
 layout_mode = 2
@@ -113,6 +137,16 @@ text = "Tipo de Terreno:"
 
 [node name="TerrainDropdown" type="OptionButton" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings/TerrainContainer"]
 layout_mode = 2
+selected = 0
+item_count = 4
+popup/item_0/text = "Selecione..."
+popup/item_0/id = 0
+popup/item_1/text = "Auto"
+popup/item_1/id = 1
+popup/item_2/text = "Ilha"
+popup/item_2/id = 2
+popup/item_3/text = "Continente"
+popup/item_3/id = 3
 
 [node name="SeedContainer" type="HBoxContainer" parent="MainPanel/ScrollContainer/VBoxContainer/BasicSettings"]
 layout_mode = 2
@@ -172,9 +206,10 @@ tooltip_text = "Remove todos os elementos"
 text = "🧹 Limpar"
 
 [node name="StatusLabel" type="Label" parent="MainPanel/ScrollContainer/VBoxContainer/GenerationControls"]
+modulate = Color(0, 1, 0, 1)
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 1, 0, 1)
-text = "✅ Pronto para gerar"
+text = "✅ Interface pronta"
 horizontal_alignment = 1
 vertical_alignment = 1
 

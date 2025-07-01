@@ -37,6 +37,7 @@ var terrain_generator: TileMapLayer
 var resource_generator: TileMapLayer
 var object_generator: TileMapLayer
 var shader_controller: Sprite2D
+var preset_controller: Control  # Adiciona referência para o controller
 
 # === SISTEMA DE COORDENAÇÃO MELHORADO ===
 var occupied_positions: Dictionary = {}
@@ -70,40 +71,107 @@ func _ready():
 		await get_tree().process_frame
 		generate_complete_world()
 		setup_groups()
-		create_preset_interface()
+		# Cria interface de preset com tratamento de erro
+		call_deferred("create_preset_interface")
 
 func setup_groups():
 	"""Configura grupos para os componentes"""
 	add_to_group("world_manager")  # Este nó principal
 	
 	# Encontra e adiciona componentes aos grupos
-	var terrain = get_node_or_null("TerrainGenerator")
+	var terrain = get_node_or_null("Terrain/TerrainMap")
 	if terrain:
 		terrain.add_to_group("terrain")
 	
-	var resources = get_node_or_null("ResourceGenerator")
+	var resources = get_node_or_null("Resource/ResourceMap")
 	if resources:
 		resources.add_to_group("resources")
 	
-	var objects = get_node_or_null("ObjectGenerator")
+	var objects = get_node_or_null("Object/ObjectMap")
 	if objects:
 		objects.add_to_group("objects")
 		
+	var shader = get_node_or_null("ShaderTerrain")
+	if shader:
+		shader.add_to_group("shader")
+
 func create_preset_interface():
-	"""Cria a interface de presets"""
-	var preset_controller = preload("res://WorldPresetController.gd").new()
-	add_child(preset_controller)
-	print("✅ Interface de presets carregada!")
+	"""Cria a interface de presets com tratamento de erro melhorado"""
+	print("🎨 Criando interface de presets...")
 	
+	# Verifica se o arquivo existe
+	if not FileAccess.file_exists("res://PresetUI.tscn"):
+		print("❌ Erro: PresetUI.tscn não encontrado!")
+		print("   Criando interface básica...")
+		create_basic_preset_interface()
+		return
+	
+	# Carrega a cena
+	var preset_scene = load("res://PresetUI.tscn") as PackedScene
+	if not preset_scene:
+		print("❌ Erro ao carregar PresetUI.tscn!")
+		create_basic_preset_interface()
+		return
+	
+	# Instancia a cena
+	preset_controller = preset_scene.instantiate()
+	if preset_controller:
+		add_child(preset_controller)
+		print("✅ Interface de presets carregada!")
+		
+		# Posiciona a interface no lado direito
+		if preset_controller.has_method("setup_position"):
+			preset_controller.setup_position()
+		else:
+			# Posicionamento padrão
+			preset_controller.position = Vector2(get_viewport().size.x - 420, 20)
+	else:
+		print("❌ Erro ao instanciar PresetUI.tscn!")
+		create_basic_preset_interface()
+
+func create_basic_preset_interface():
+	"""Cria uma interface de preset básica caso a cena não seja encontrada"""
+	print("🔧 Criando interface básica de preset...")
+	
+	# Cria um Control básico
+	preset_controller = Control.new()
+	preset_controller.name = "PresetController"
+	preset_controller.set_script(load("res://WorldPresetController.gd"))
+	add_child(preset_controller)
+	
+	print("✅ Interface básica criada")
+
 # === BUSCA DE COMPONENTES ===
 func find_all_components() -> bool:
 	"""Encontra todos os componentes necessários"""
 	print("🔍 Procurando componentes...")
 	
+	# Primeiro tenta por grupos
 	terrain_generator = find_component_by_group("terrain")
 	resource_generator = find_component_by_group("resources")
 	object_generator = find_component_by_group("objects")
 	shader_controller = find_component_by_group("shader")
+	
+	# Se não encontrar por grupos, tenta por caminho
+	if not terrain_generator:
+		terrain_generator = get_node_or_null("Terrain/TerrainMap")
+		if terrain_generator:
+			print("✅ TerrainGenerator encontrado por caminho")
+	
+	if not resource_generator:
+		resource_generator = get_node_or_null("Resource/ResourceMap")
+		if resource_generator:
+			print("✅ ResourceGenerator encontrado por caminho")
+	
+	if not object_generator:
+		object_generator = get_node_or_null("Object/ObjectMap")
+		if object_generator:
+			print("✅ ObjectGenerator encontrado por caminho")
+	
+	if not shader_controller:
+		shader_controller = get_node_or_null("ShaderTerrain")
+		if shader_controller:
+			print("✅ ShaderController encontrado por caminho")
 	
 	print_component_status()
 	return terrain_generator != null
@@ -115,7 +183,6 @@ func find_component_by_group(group_name: String) -> Node:
 		print("✅ ", group_name.capitalize(), " encontrado: ", nodes[0].get_path())
 		return nodes[0]
 	
-	print("❌ ", group_name.capitalize(), " não encontrado")
 	return null
 
 func print_component_status():
@@ -365,7 +432,30 @@ func generate_objects_coordinated_safe() -> void:
 	
 	# CRÍTICO: Passa posições ocupadas para o ObjectGenerator
 	if object_generator.has_method("set_occupied_positions"):
-		object_generator.set_occupied_positions(occupied_positions)
+		print("📍 Recebidas ", occupied_positions.size(), " posições ocupadas")
+		# Cria uma cópia expandida com buffer adicional
+		var expanded_positions = {}
+		for pos_str in occupied_positions:
+			expanded_positions[pos_str] = true
+			
+			# Adiciona buffer adicional para objetos
+			# Remove parênteses e espaços de forma compatível
+			var clean_str = pos_str.replace("(", "").replace(")", "").replace(" ", "")
+			var parts = clean_str.split(",")
+			
+			if parts.size() >= 2:
+				var x = int(parts[0])
+				var y = int(parts[1])
+				
+				for dx in range(-object_spacing, object_spacing + 1):
+					for dy in range(-object_spacing, object_spacing + 1):
+						var buffer_pos = Vector2i(x + dx, y + dy)
+						if (buffer_pos.x >= 0 and buffer_pos.x < map_size and
+							buffer_pos.y >= 0 and buffer_pos.y < map_size):
+							expanded_positions[str(buffer_pos)] = true
+		
+		print("🛡️ Posições expandidas com buffer: ", expanded_positions.size())
+		object_generator.set_occupied_positions(expanded_positions)
 	
 	# Garante que encontre os geradores
 	if object_generator.has_method("find_generators"):
